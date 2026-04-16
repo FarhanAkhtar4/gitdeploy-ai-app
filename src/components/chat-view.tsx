@@ -19,6 +19,7 @@ import {
   Globe,
   AlertCircle,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const QUICK_ACTIONS = [
   { icon: AlertCircle, label: 'Why did my deployment fail?', color: '#f85149' },
@@ -26,6 +27,16 @@ const QUICK_ACTIONS = [
   { icon: Wrench, label: 'Build me a user profile page', color: '#3fb950' },
   { icon: Globe, label: 'Which free platform is best?', color: '#e3b341' },
 ];
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-center gap-1.5 px-2">
+      <span className="typing-dot-1 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#58a6ff' }} />
+      <span className="typing-dot-2 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#58a6ff' }} />
+      <span className="typing-dot-3 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#58a6ff' }} />
+    </div>
+  );
+}
 
 export function ChatView() {
   const { chatMessages, addChatMessage, clearChatMessages } = useAppStore();
@@ -124,9 +135,17 @@ export function ChatView() {
         <div className="space-y-4 max-w-3xl mx-auto">
           {chatMessages.length === 0 && !showDiff && (
             <div className="text-center py-12">
-              <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4" style={{ backgroundColor: '#58a6ff10' }}>
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.5, type: 'spring' }}
+                className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 relative"
+                style={{ backgroundColor: '#58a6ff10' }}
+              >
                 <Sparkles className="w-8 h-8" style={{ color: '#58a6ff' }} />
-              </div>
+                {/* Pulsing ring */}
+                <div className="absolute inset-0 rounded-2xl animate-pulse-ring" style={{ border: '2px solid rgba(88,166,255,0.3)' }} />
+              </motion.div>
               <h3 className="text-lg font-semibold" style={{ color: '#c9d1d9' }}>
                 AI Deployment Assistant
               </h3>
@@ -134,16 +153,25 @@ export function ChatView() {
                 Ask about deployment failures, workflow changes, or hosting recommendations
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md mx-auto mt-6">
-                {QUICK_ACTIONS.map((action) => (
-                  <button
+                {QUICK_ACTIONS.map((action, i) => (
+                  <motion.button
                     key={action.label}
-                    className="flex items-center gap-2.5 text-xs px-4 py-3 rounded-xl border transition-all duration-200 hover:bg-[#21262d] hover:border-[#58a6ff] hover:-translate-y-0.5 text-left"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.1, duration: 0.3 }}
+                    className="flex items-center gap-2.5 text-xs px-4 py-3 rounded-xl border transition-all duration-200 hover:bg-[#21262d] hover:border-[#58a6ff] hover:-translate-y-0.5 text-left group"
                     style={{ borderColor: '#30363d', color: '#8b949e' }}
                     onClick={() => sendMessage(action.label)}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = `linear-gradient(135deg, ${action.color}10, #21262d)`;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = '';
+                    }}
                   >
-                    <action.icon className="w-3.5 h-3.5 shrink-0" style={{ color: action.color }} />
+                    <action.icon className="w-3.5 h-3.5 shrink-0 transition-transform duration-200 group-hover:scale-110" style={{ color: action.color }} />
                     {action.label}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -178,52 +206,71 @@ export function ChatView() {
             </div>
           )}
 
-          {chatMessages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-            >
-              <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                style={{
-                  background: msg.role === 'user'
-                    ? 'linear-gradient(135deg, #30363d, #21262d)'
-                    : 'linear-gradient(135deg, #58a6ff30, #3fb95020)',
-                }}
+          <AnimatePresence mode="popLayout">
+            {chatMessages.map((msg) => (
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10, x: msg.role === 'user' ? 10 : -10 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
               >
-                {msg.role === 'user' ? (
-                  <User className="w-4 h-4" style={{ color: '#c9d1d9' }} />
-                ) : (
-                  <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
-                )}
-              </div>
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === 'user' ? 'text-right' : ''
-                }`}
-                style={{
-                  backgroundColor: msg.role === 'user' ? '#30363d' : '#0d1117',
-                  border: `1px solid ${msg.role === 'user' ? '#484f58' : '#21262d'}`,
-                  color: '#c9d1d9',
-                }}
-              >
-                <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
-                  {msg.content}
+                <div className="relative shrink-0">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{
+                      background: msg.role === 'user'
+                        ? 'linear-gradient(135deg, #30363d, #21262d)'
+                        : 'linear-gradient(135deg, #58a6ff30, #3fb95020)',
+                    }}
+                  >
+                    {msg.role === 'user' ? (
+                      <User className="w-4 h-4" style={{ color: '#c9d1d9' }} />
+                    ) : (
+                      <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
+                    )}
+                  </div>
+                  {/* AI avatar pulsing ring */}
+                  {msg.role === 'assistant' && (
+                    <div className="absolute inset-0 rounded-xl animate-pulse-ring" style={{ border: '1.5px solid rgba(88,166,255,0.3)' }} />
+                  )}
                 </div>
-              </div>
-            </div>
-          ))}
+                <div
+                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                    msg.role === 'user' ? 'text-right' : ''
+                  }`}
+                  style={{
+                    backgroundColor: msg.role === 'user' ? '#30363d' : '#0d1117',
+                    border: `1px solid ${msg.role === 'user' ? '#484f58' : '#21262d'}`,
+                    color: '#c9d1d9',
+                  }}
+                >
+                  <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                    {msg.content}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
           {isLoading && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020)' }}>
-                <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex gap-3"
+            >
+              <div className="relative shrink-0">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020)' }}>
+                  <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
+                </div>
+                <div className="absolute inset-0 rounded-xl animate-pulse-ring" style={{ border: '1.5px solid rgba(88,166,255,0.3)' }} />
               </div>
               <div className="rounded-2xl px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
-                <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#58a6ff' }} />
-                <span className="text-xs" style={{ color: '#8b949e' }}>Thinking...</span>
+                <TypingIndicator />
+                <span className="text-xs ml-1" style={{ color: '#8b949e' }}>Thinking</span>
               </div>
-            </div>
+            </motion.div>
           )}
 
           <div ref={messagesEndRef} />
@@ -249,8 +296,14 @@ export function ChatView() {
           <Button
             size="icon"
             disabled={!input.trim() || isLoading}
-            className="rounded-xl shrink-0"
-            style={{ background: input.trim() ? 'linear-gradient(135deg, #238636, #2ea043)' : '#21262d', color: input.trim() ? 'white' : '#484f58' }}
+            className="rounded-xl shrink-0 transition-all duration-300"
+            style={{
+              background: input.trim()
+                ? 'linear-gradient(135deg, #58a6ff, #238636)'
+                : '#21262d',
+              color: input.trim() ? 'white' : '#484f58',
+              boxShadow: input.trim() ? '0 0 15px rgba(88,166,255,0.3)' : 'none',
+            }}
             onClick={() => sendMessage()}
           >
             <Send className="w-4 h-4" />

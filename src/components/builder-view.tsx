@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RequirementsCard as RequirementsCardComponent } from '@/components/requirements-card';
+import { RequirementsCard } from '@/components/requirements-card';
 import { FileTree, buildTreeFromPaths } from '@/components/file-tree';
 import { ProjectTemplates } from '@/components/project-templates';
 import { StatusBadge } from '@/components/status-badge';
@@ -24,11 +24,37 @@ import {
   Sparkles,
   LayoutTemplate,
   MessageSquare,
+  Circle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type BuilderPhase = 'describe' | 'requirements' | 'file_tree' | 'generating' | 'complete' | 'deploying';
 type BuilderTab = 'chat' | 'templates';
+
+function ProgressDots({ current, total }: { current: number; total: number }) {
+  const maxDots = Math.min(total, 20);
+  const step = total > maxDots ? Math.ceil(total / maxDots) : 1;
+  const dots = [];
+  for (let i = 0; i < maxDots; i++) {
+    const fileIndex = i * step;
+    const isComplete = fileIndex < current;
+    const isCurrent = fileIndex === current - 1;
+    dots.push(
+      <div
+        key={i}
+        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+          isCurrent ? 'animate-pulse-glow scale-125' : ''
+        }`}
+        style={{
+          backgroundColor: isComplete ? '#3fb950' : isCurrent ? '#58a6ff' : '#21262d',
+          boxShadow: isCurrent ? '0 0 6px rgba(88,166,255,0.5)' : 'none',
+        }}
+      />
+    );
+  }
+  return <div className="flex items-center gap-[3px] flex-wrap">{dots}</div>;
+}
 
 export function BuilderView() {
   const {
@@ -48,6 +74,7 @@ export function BuilderView() {
     setFileTreeApproved,
     setCurrentView,
     setSelectedProject,
+    setSelectedFile,
   } = useAppStore();
 
   const [input, setInput] = useState('');
@@ -246,9 +273,20 @@ export function BuilderView() {
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#30363d' }}>
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg" style={{ backgroundColor: '#58a6ff15' }}>
-              <Sparkles className="w-4 h-4" style={{ color: '#58a6ff' }} />
+              <Sparkles className={`w-4 h-4 ${isLoading ? 'animate-sparkle' : ''}`} style={{ color: '#58a6ff' }} />
             </div>
-            <h2 className="text-sm font-medium" style={{ color: '#c9d1d9' }}>AI Project Builder</h2>
+            <h2
+              className="text-sm font-medium"
+              style={{
+                color: '#c9d1d9',
+                ...(isLoading ? {
+                  textShadow: '0 0 20px rgba(88,166,255,0.5), 0 0 40px rgba(88,166,255,0.2)',
+                  animation: 'pulse-glow 2s ease-in-out infinite',
+                } : {}),
+              }}
+            >
+              AI Project Builder
+            </h2>
             <StatusBadge status={isBuilding ? 'building' : phase === 'complete' ? 'completed' : 'not_deployed'} />
           </div>
           <div className="flex items-center gap-2">
@@ -285,9 +323,15 @@ export function BuilderView() {
               <div className="space-y-4 max-w-3xl mx-auto">
                 {builderChat.length === 0 && (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4" style={{ backgroundColor: '#58a6ff10' }}>
-                      <Sparkles className="w-8 h-8" style={{ color: '#58a6ff' }} />
-                    </div>
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.5, type: 'spring' }}
+                      className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 animate-float"
+                      style={{ backgroundColor: '#58a6ff10' }}
+                    >
+                      <Sparkles className="w-8 h-8 animate-sparkle" style={{ color: '#58a6ff' }} />
+                    </motion.div>
                     <h3 className="text-lg font-semibold" style={{ color: '#c9d1d9' }}>
                       Describe your project
                     </h3>
@@ -300,58 +344,71 @@ export function BuilderView() {
                         { emoji: '🍕', text: 'Create a REST API for a food delivery app' },
                         { emoji: '✅', text: 'Build a full-stack todo app with auth' },
                         { emoji: '📊', text: 'Create an analytics dashboard with charts' },
-                      ].map((example) => (
-                        <button
+                      ].map((example, i) => (
+                        <motion.button
                           key={example.text}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.3 + i * 0.1, duration: 0.3 }}
                           className="text-xs px-3 py-2 rounded-xl border transition-all duration-200 hover:bg-[#21262d] hover:border-[#58a6ff] hover:-translate-y-0.5"
                           style={{ borderColor: '#30363d', color: '#8b949e' }}
                           onClick={() => sendMessage(example.text)}
                         >
                           {example.emoji} {example.text}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {builderChat.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                      style={{
-                        background: msg.role === 'user'
-                          ? 'linear-gradient(135deg, #30363d, #21262d)'
-                          : 'linear-gradient(135deg, #58a6ff30, #3fb95020)',
-                      }}
+                <AnimatePresence mode="popLayout">
+                  {builderChat.map((msg) => (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.3 }}
+                      className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                     >
-                      {msg.role === 'user' ? (
-                        <User className="w-4 h-4" style={{ color: '#c9d1d9' }} />
-                      ) : (
-                        <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
-                      )}
-                    </div>
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                        msg.role === 'user' ? 'text-right' : ''
-                      }`}
-                      style={{
-                        backgroundColor: msg.role === 'user' ? '#30363d' : '#0d1117',
-                        border: `1px solid ${msg.role === 'user' ? '#484f58' : '#21262d'}`,
-                        color: '#c9d1d9',
-                      }}
-                    >
-                      <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
-                        {msg.content}
+                      <div
+                        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                        style={{
+                          background: msg.role === 'user'
+                            ? 'linear-gradient(135deg, #30363d, #21262d)'
+                            : 'linear-gradient(135deg, #58a6ff30, #3fb95020)',
+                        }}
+                      >
+                        {msg.role === 'user' ? (
+                          <User className="w-4 h-4" style={{ color: '#c9d1d9' }} />
+                        ) : (
+                          <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                          msg.role === 'user' ? 'text-right' : ''
+                        }`}
+                        style={{
+                          backgroundColor: msg.role === 'user' ? '#30363d' : '#0d1117',
+                          border: `1px solid ${msg.role === 'user' ? '#484f58' : '#21262d'}`,
+                          color: '#c9d1d9',
+                        }}
+                      >
+                        <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                          {msg.content}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
 
                 {isLoading && (
-                  <div className="flex gap-3">
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex gap-3"
+                  >
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020)' }}>
                       <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
                     </div>
@@ -359,7 +416,7 @@ export function BuilderView() {
                       <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#58a6ff' }} />
                       <span className="text-xs" style={{ color: '#8b949e' }}>Thinking...</span>
                     </div>
-                  </div>
+                  </motion.div>
                 )}
 
                 <div ref={messagesEndRef} />
@@ -370,17 +427,29 @@ export function BuilderView() {
 
         {/* Build Progress */}
         {isBuilding && buildProgress.total > 0 && (
-          <div className="px-4 py-2 border-t" style={{ borderColor: '#30363d' }}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-medium" style={{ color: '#58a6ff' }}>
-                📦 [BUILD PROGRESS: {buildProgress.current} of {buildProgress.total} files — {buildProgress.section}]
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-3 border-t"
+            style={{ borderColor: '#30363d', backgroundColor: '#0d1117' }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#58a6ff' }}>
+                <span className="animate-pulse-glow">📦</span> BUILD PROGRESS
+              </span>
+              <span className="text-[10px] font-mono" style={{ color: '#8b949e' }}>
+                {buildProgress.current} of {buildProgress.total} files — {buildProgress.section}
               </span>
             </div>
-            <Progress
-              value={(buildProgress.current / buildProgress.total) * 100}
-              className="h-1.5"
-            />
-          </div>
+            <ProgressDots current={buildProgress.current} total={buildProgress.total} />
+            <div className="mt-2">
+              <Progress
+                value={(buildProgress.current / buildProgress.total) * 100}
+                className="h-1.5 progress-shimmer"
+              />
+            </div>
+          </motion.div>
         )}
 
         {/* Deploy / Complete Buttons */}
@@ -450,8 +519,14 @@ export function BuilderView() {
             <Button
               size="icon"
               disabled={!input.trim() || isLoading}
-              className="rounded-xl shrink-0"
-              style={{ background: input.trim() ? 'linear-gradient(135deg, #238636, #2ea043)' : '#21262d', color: input.trim() ? 'white' : '#484f58' }}
+              className="rounded-xl shrink-0 transition-all duration-300"
+              style={{
+                background: input.trim()
+                  ? 'linear-gradient(135deg, #58a6ff, #238636)'
+                  : '#21262d',
+                color: input.trim() ? 'white' : '#484f58',
+                boxShadow: input.trim() ? '0 0 15px rgba(88,166,255,0.3)' : 'none',
+              }}
               onClick={() => sendMessage(input)}
             >
               <Send className="w-4 h-4" />
@@ -461,11 +536,11 @@ export function BuilderView() {
       </div>
 
       {/* Side Panel */}
-      <div className="w-80 border-l hidden md:block overflow-y-auto" style={{ borderColor: '#30363d', backgroundColor: '#161b22' }}>
+      <div className="w-80 border-l hidden md:block overflow-y-auto custom-scroll" style={{ borderColor: '#30363d', backgroundColor: '#161b22' }}>
         <div className="p-4 space-y-4">
           {/* Requirements Card */}
           {requirementsCard && phase !== 'describe' && (
-            <RequirementsCardComponent
+            <RequirementsCard
               card={requirementsCard}
               onConfirm={handleConfirmRequirements}
               onReject={handleRejectRequirements}
@@ -498,19 +573,28 @@ export function BuilderView() {
               <h3 className="text-xs font-medium mb-2 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
                 <FileCode className="w-3.5 h-3.5" style={{ color: '#3fb950' }} /> Generated Files ({generatedFiles.length})
               </h3>
-              <div className="space-y-1 max-h-64 overflow-y-auto">
-                {generatedFiles.map((file, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#21262d]"
-                    style={{ backgroundColor: '#0d1117' }}
-                  >
-                    <CheckCircle className="w-3 h-3 shrink-0" style={{ color: '#3fb950' }} />
-                    <span className="font-mono truncate" style={{ color: '#8b949e' }}>
-                      {file.path}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-1 max-h-64 overflow-y-auto custom-scroll">
+                <AnimatePresence>
+                  {generatedFiles.map((file, i) => (
+                    <motion.div
+                      key={`${file.path}-${i}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03, duration: 0.2 }}
+                      className="flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#21262d] cursor-pointer group"
+                      style={{ backgroundColor: '#0d1117' }}
+                      onClick={() => setSelectedFile({ path: file.path, content: file.content, purpose: file.purpose, sizeBytes: file.content.length })}
+                    >
+                      <CheckCircle className="w-3 h-3 shrink-0" style={{ color: '#3fb950' }} />
+                      <span className="font-mono truncate flex-1" style={{ color: '#8b949e' }}>
+                        {file.path}
+                      </span>
+                      <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: '#58a6ff' }}>
+                        View
+                      </span>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             </div>
           )}

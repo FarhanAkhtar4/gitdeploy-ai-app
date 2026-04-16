@@ -10,6 +10,9 @@ import { DeployView } from '@/components/deploy-view';
 import { HostingView } from '@/components/hosting-view';
 import { ChatView } from '@/components/chat-view';
 import { SettingsView } from '@/components/settings-view';
+import { CommandPalette } from '@/components/command-palette';
+import { FileViewer } from '@/components/file-viewer';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function GitDeployAI() {
   const { currentView, user, isGithubConnected, sidebarOpen } = useAppStore();
@@ -43,9 +46,19 @@ export default function GitDeployAI() {
         <SidebarNav />
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto min-w-0" style={{ backgroundColor: '#0d1117' }}>
-          <div className="p-4 md:p-6 pb-24 md:pb-6">
-            {renderView()}
+        <main className="flex-1 overflow-y-auto min-w-0 gradient-mesh" style={{ backgroundColor: '#0d1117' }}>
+          <div className="p-4 md:p-6 pb-24 md:pb-6 relative z-10">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentView}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+              >
+                {renderView()}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </main>
       </div>
@@ -63,6 +76,9 @@ export default function GitDeployAI() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            <span className="text-[10px] hidden sm:inline" style={{ color: '#484f58' }}>
+              Press <kbd className="px-1 py-0.5 rounded text-[9px] font-mono border" style={{ borderColor: '#30363d', backgroundColor: '#21262d' }}>⌘K</kbd> to search
+            </span>
             <span className="text-[10px]" style={{ color: '#484f58' }}>
               Powered by z-ai-web-dev-sdk
             </span>
@@ -72,6 +88,10 @@ export default function GitDeployAI() {
           </div>
         </div>
       </footer>
+
+      {/* Global Overlays */}
+      <CommandPalette />
+      <FileViewer />
     </div>
   );
 }

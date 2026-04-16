@@ -121,7 +121,9 @@
   }
 }
 
-/* Custom scrollbar for dark theme */
+/* ============================================
+   Custom Scrollbar — Dark Theme
+   ============================================ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -129,15 +131,21 @@
 
 ::-webkit-scrollbar-track {
   background: #0d1117;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #30363d;
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #484f58;
+}
+
+::-webkit-scrollbar-corner {
+  background: #0d1117;
 }
 
 /* Smooth scrolling */
@@ -155,4 +163,294 @@ html {
 ::selection {
   background-color: rgba(88, 166, 255, 0.3);
   color: #c9d1d9;
+}
+
+/* ============================================
+   Keyframe Animations
+   ============================================ */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes blink-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120px) rotate(720deg); opacity: 0; }
+}
+
+@keyframes typing-dot {
+  0%, 20% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+  80%, 100% { opacity: 0.3; transform: scale(0.8); }
+}
+
+@keyframes gradient-border-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes sparkle-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes progress-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes underline-expand {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes particle-rise {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-40px) scale(0); opacity: 0; }
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+/* Float animation */
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Shimmer effect */
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(88, 166, 255, 0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Pulse glow */
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Fade in up */
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+}
+
+/* Slide in right */
+.animate-slide-in-right {
+  animation: slide-in-right 0.4s ease-out forwards;
+}
+
+/* Blinking cursor for terminal */
+.animate-blink-cursor {
+  animation: blink-cursor 1s step-end infinite;
+}
+
+/* Typing dots */
+.typing-dot-1 { animation: typing-dot 1.4s ease-in-out infinite 0s; }
+.typing-dot-2 { animation: typing-dot 1.4s ease-in-out infinite 0.2s; }
+.typing-dot-3 { animation: typing-dot 1.4s ease-in-out infinite 0.4s; }
+
+/* Pulse ring for avatar */
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Underline expand animation */
+.animate-underline {
+  position: relative;
+}
+.animate-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: linear-gradient(90deg, #58a6ff, #3fb950);
+  border-radius: 1px;
+  animation: underline-expand 0.8s ease-out forwards;
+}
+
+/* Gradient border utility */
+.gradient-border {
+  position: relative;
+  border: none !important;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #58a6ff, #3fb950, #e3b341);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glow effects */
+.glow-blue {
+  box-shadow: 0 0 20px rgba(88, 166, 255, 0.15), 0 0 40px rgba(88, 166, 255, 0.05);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(63, 185, 80, 0.15), 0 0 40px rgba(63, 185, 80, 0.05);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(248, 81, 73, 0.15), 0 0 40px rgba(248, 81, 73, 0.05);
+}
+
+.glow-yellow {
+  box-shadow: 0 0 20px rgba(227, 179, 65, 0.15), 0 0 40px rgba(227, 179, 65, 0.05);
+}
+
+/* Hover glow transitions */
+.glow-hover-blue {
+  transition: box-shadow 0.3s ease;
+}
+.glow-hover-blue:hover {
+  box-shadow: 0 0 25px rgba(88, 166, 255, 0.2), 0 0 50px rgba(88, 166, 255, 0.08);
+}
+
+.glow-hover-green {
+  transition: box-shadow 0.3s ease;
+}
+.glow-hover-green:hover {
+  box-shadow: 0 0 25px rgba(63, 185, 80, 0.2), 0 0 50px rgba(63, 185, 80, 0.08);
+}
+
+/* Gradient mesh background overlay */
+.gradient-mesh {
+  position: relative;
+}
+.gradient-mesh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 600px 400px at 20% 10%, rgba(88, 166, 255, 0.04), transparent),
+    radial-gradient(ellipse 500px 350px at 80% 80%, rgba(63, 185, 80, 0.03), transparent),
+    radial-gradient(ellipse 400px 300px at 50% 50%, rgba(227, 179, 65, 0.02), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Progress bar shimmer */
+.progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.progress-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Confetti particle */
+.confetti-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: confetti-fall 2s ease-out forwards;
+}
+
+/* Sparkle icon animation */
+.animate-sparkle {
+  animation: sparkle-rotate 8s linear infinite;
+}
+
+/* Green glow badge */
+.free-badge-glow {
+  text-shadow: 0 0 8px rgba(63, 185, 80, 0.5);
+  box-shadow: 0 0 12px rgba(63, 185, 80, 0.3);
+}
+
+/* Gradient top border hover */
+.gradient-top-border {
+  position: relative;
+  overflow: hidden;
+}
+.gradient-top-border::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #58a6ff, #3fb950, #e3b341);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  transform-origin: left;
+}
+.gradient-top-border:hover::after {
+  transform: scaleX(1);
+}
+
+/* Stagger delay utilities */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* Custom scrollable area */
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
 }

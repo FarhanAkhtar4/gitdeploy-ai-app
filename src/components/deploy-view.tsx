@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TerminalConsole } from '@/components/terminal-console';
 import { StatusBadge } from '@/components/status-badge';
 import { DeploymentScheduler } from '@/components/deployment-scheduler';
+import { WorkflowTemplate } from '@/components/workflow-template';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Rocket,
   CheckCircle,
@@ -18,8 +20,11 @@ import {
   ArrowRight,
   Wifi,
   WifiOff,
+  RotateCcw,
+  Upload,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DeployStep {
   id: string;
@@ -28,12 +33,43 @@ interface DeployStep {
   status: 'pending' | 'in_progress' | 'complete' | 'error';
 }
 
+// Confetti particles component
+function ConfettiParticles() {
+  const particles = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    left: `${Math.random() * 100}%`,
+    delay: `${Math.random() * 1}s`,
+    size: 4 + Math.random() * 4,
+    color: ['#3fb950', '#58a6ff', '#e3b341', '#3fb950', '#56d364'][Math.floor(Math.random() * 5)],
+  }));
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="confetti-particle"
+          style={{
+            left: p.left,
+            top: '-10px',
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            animationDelay: p.delay,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function DeployView() {
   const { user, selectedProject, isGithubConnected, setCurrentView } = useAppStore();
   const [deploying, setDeploying] = useState(false);
   const [deployResult, setDeployResult] = useState<Record<string, unknown> | null>(null);
   const [logs, setLogs] = useState<Array<{ timestamp: string; message: string; type: 'info' | 'error' | 'success' | 'warning' }>>([]);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [deployType, setDeployType] = useState<'initial' | 'redeploy'>('initial');
   const [steps, setSteps] = useState<DeployStep[]>([
     { id: 'd1', label: 'D1 — Repository Setup', description: 'Create or verify GitHub repository', status: 'pending' },
     { id: 'd2', label: 'D2 — File Upload', description: 'Push all project files to GitHub', status: 'pending' },
@@ -102,6 +138,8 @@ export function DeployView() {
     setDeploying(true);
     setLogs([]);
     setDeployResult(null);
+    // Reset steps
+    setSteps(prev => prev.map(s => ({ ...s, status: 'pending' as const })));
     addLog('🚀 Starting deployment process...', 'info');
 
     try {
@@ -219,21 +257,30 @@ export function DeployView() {
 
   if (!selectedProject) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#21262d' }}>
-          <Rocket className="w-10 h-10" style={{ color: '#30363d' }} />
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center py-12">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#21262d' }}>
+              <Rocket className="w-10 h-10" style={{ color: '#30363d' }} />
+            </div>
+          </motion.div>
+          <h3 className="text-lg font-semibold" style={{ color: '#c9d1d9' }}>No project to deploy</h3>
+          <p className="text-sm mt-2 max-w-sm text-center" style={{ color: '#8b949e' }}>
+            Build a project first, then deploy it to GitHub
+          </p>
+          <Button
+            className="gap-2 mt-5"
+            style={{ background: 'linear-gradient(135deg, #238636, #2ea043)', color: 'white' }}
+            onClick={() => setCurrentView('builder')}
+          >
+            <ArrowRight className="w-4 h-4" /> Go to Builder
+          </Button>
         </div>
-        <h3 className="text-lg font-semibold" style={{ color: '#c9d1d9' }}>No project to deploy</h3>
-        <p className="text-sm mt-2 max-w-sm text-center" style={{ color: '#8b949e' }}>
-          Build a project first, then deploy it to GitHub
-        </p>
-        <Button
-          className="gap-2 mt-5"
-          style={{ background: 'linear-gradient(135deg, #238636, #2ea043)', color: 'white' }}
-          onClick={() => setCurrentView('builder')}
-        >
-          <ArrowRight className="w-4 h-4" /> Go to Builder
-        </Button>
+        <WorkflowTemplate />
       </div>
     );
   }
@@ -241,7 +288,12 @@ export function DeployView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
+      >
         <div>
           <h1 className="text-2xl font-bold" style={{ color: '#c9d1d9' }}>Deploy to GitHub</h1>
           <p className="text-sm mt-1" style={{ color: '#8b949e' }}>
@@ -262,7 +314,43 @@ export function DeployView() {
           </div>
           <StatusBadge status={deployResult ? (deployResult.errors?.length > 0 ? 'failed' : 'live') : 'not_deployed'} size="md" />
         </div>
-      </div>
+      </motion.div>
+
+      {/* Deployment Type Selector */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+      >
+        <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium" style={{ color: '#8b949e' }}>Deployment Type</p>
+                <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>
+                  {deployType === 'initial' ? 'First time pushing this project to GitHub' : 'Update existing repository with new changes'}
+                </p>
+              </div>
+              <Tabs value={deployType} onValueChange={(v) => setDeployType(v as 'initial' | 'redeploy')}>
+                <TabsList className="h-8 bg-[#21262d]">
+                  <TabsTrigger
+                    value="initial"
+                    className="h-6 text-xs px-3 gap-1.5 data-[state=active]:bg-[#30363d] data-[state=active]:text-[#58a6ff]"
+                  >
+                    <Upload className="w-3 h-3" /> Initial Deploy
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="redeploy"
+                    className="h-6 text-xs px-3 gap-1.5 data-[state=active]:bg-[#30363d] data-[state=active]:text-[#58a6ff]"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Redeploy
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Progress */}
       <div>
@@ -270,53 +358,93 @@ export function DeployView() {
           <span className="text-xs font-medium" style={{ color: '#8b949e' }}>Deployment Progress</span>
           <span className="text-xs font-mono font-bold" style={{ color: '#58a6ff' }}>{progress}%</span>
         </div>
-        <Progress value={progress} className="h-2" />
+        <div className="progress-shimmer rounded-full overflow-hidden">
+          <Progress value={progress} className="h-2" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Steps & Terminal - 2 columns */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Steps */}
-          <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm" style={{ color: '#8b949e' }}>Deployment Steps</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {steps.map((step, index) => (
-                <div
-                  key={step.id}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300"
-                  style={{
-                    backgroundColor: step.status === 'in_progress' ? '#58a6ff08' : 'transparent',
-                    borderLeft: step.status === 'in_progress' ? '2px solid #58a6ff' : '2px solid transparent',
-                  }}
-                >
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono w-5" style={{ color: '#484f58' }}>{index + 1}</span>
-                    {step.status === 'complete' ? (
-                      <CheckCircle className="w-4 h-4" style={{ color: '#3fb950' }} />
-                    ) : step.status === 'error' ? (
-                      <AlertCircle className="w-4 h-4" style={{ color: '#f85149' }} />
-                    ) : step.status === 'in_progress' ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" style={{ color: '#58a6ff' }} />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border-2" style={{ borderColor: '#30363d' }} />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-medium" style={{ color: step.status === 'pending' ? '#8b949e' : '#c9d1d9' }}>
-                      {step.label}
-                    </p>
-                    <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>{step.description}</p>
-                  </div>
-                  <StatusBadge status={step.status === 'in_progress' ? 'building' : step.status === 'complete' ? 'live' : step.status === 'error' ? 'failed' : 'not_deployed'} />
+          {/* Steps — Timeline style */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+          >
+            <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm" style={{ color: '#8b949e' }}>Deployment Steps</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-0">
+                  {steps.map((step, index) => (
+                    <div key={step.id} className="flex items-start gap-3 relative">
+                      {/* Timeline line */}
+                      {index < steps.length - 1 && (
+                        <div
+                          className="absolute left-[15px] top-[32px] w-px"
+                          style={{
+                            height: 'calc(100% - 20px)',
+                            backgroundColor: step.status === 'complete' ? '#3fb950' : '#21262d',
+                          }}
+                        />
+                      )}
+                      {/* Step dot/icon */}
+                      <div className="flex items-center justify-center shrink-0 z-10">
+                        <div
+                          className="w-[30px] h-[30px] rounded-full flex items-center justify-center transition-all duration-300"
+                          style={{
+                            backgroundColor:
+                              step.status === 'complete' ? 'rgba(63,185,80,0.15)' :
+                              step.status === 'in_progress' ? 'rgba(88,166,255,0.15)' :
+                              step.status === 'error' ? 'rgba(248,81,73,0.15)' :
+                              'rgba(48,54,61,0.5)',
+                            boxShadow: step.status === 'in_progress' ? '0 0 10px rgba(88,166,255,0.3)' : 'none',
+                          }}
+                        >
+                          {step.status === 'complete' ? (
+                            <CheckCircle className="w-4 h-4" style={{ color: '#3fb950' }} />
+                          ) : step.status === 'error' ? (
+                            <AlertCircle className="w-4 h-4" style={{ color: '#f85149' }} />
+                          ) : step.status === 'in_progress' ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" style={{ color: '#58a6ff' }} />
+                          ) : (
+                            <span className="text-[10px] font-mono" style={{ color: '#484f58' }}>{index + 1}</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Step content */}
+                      <div className="flex-1 pb-5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium" style={{ color: step.status === 'pending' ? '#8b949e' : '#c9d1d9' }}>
+                            {step.label}
+                          </p>
+                          <StatusBadge status={step.status === 'in_progress' ? 'building' : step.status === 'complete' ? 'live' : step.status === 'error' ? 'failed' : 'not_deployed'} />
+                        </div>
+                        <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>{step.description}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Terminal Console */}
-          <TerminalConsole lines={logs} title="Deployment Log" maxHeight="300px" />
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.4 }}
+          >
+            <div className="relative">
+              <TerminalConsole lines={logs} title="Deployment Log" maxHeight="300px" />
+              {/* Blinking cursor overlay */}
+              <div className="absolute bottom-2 right-4 pointer-events-none">
+                <span className="text-xs font-mono animate-blink-cursor" style={{ color: '#3fb950' }}>▌</span>
+              </div>
+            </div>
+          </motion.div>
 
           {/* Deploy Button */}
           <div className="flex gap-3">
@@ -333,7 +461,7 @@ export function DeployView() {
               {deploying ? (
                 <><RefreshCw className="w-4 h-4 animate-spin" /> Deploying...</>
               ) : (
-                <><Rocket className="w-4 h-4" /> Deploy to GitHub</>
+                <><Rocket className="w-4 h-4" /> {deployType === 'initial' ? 'Deploy to GitHub' : 'Redeploy to GitHub'}</>
               )}
             </Button>
 
@@ -350,30 +478,40 @@ export function DeployView() {
           </div>
 
           {/* Success Card */}
-          {deployResult && deployResult.repoUrl && !deploying && (
-            <Card style={{ backgroundColor: '#0d1117', borderColor: '#238636' }}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 rounded-xl" style={{ backgroundColor: '#3fb95015' }}>
-                    <CheckCircle className="w-6 h-6" style={{ color: '#3fb950' }} />
-                  </div>
-                  <div>
-                    <p className="text-base font-semibold" style={{ color: '#3fb950' }}>✅ DEPLOYMENT SUCCESSFUL</p>
-                    <p className="text-xs mt-1" style={{ color: '#8b949e' }}>
-                      Repository: <a href={deployResult.repoUrl as string} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#58a6ff' }}>{deployResult.repoUrl as string}</a>
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  className="gap-2"
-                  style={{ backgroundColor: '#58a6ff15', color: '#58a6ff' }}
-                  onClick={() => setCurrentView('hosting')}
-                >
-                  👇 Choose a Free Hosting Platform
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+          <AnimatePresence>
+            {deployResult && deployResult.repoUrl && !deploying && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.4, type: 'spring' }}
+              >
+                <Card className="relative overflow-hidden" style={{ backgroundColor: '#0d1117', borderColor: '#238636' }}>
+                  <ConfettiParticles />
+                  <CardContent className="p-6 relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 rounded-xl glow-green" style={{ backgroundColor: '#3fb95015' }}>
+                        <CheckCircle className="w-6 h-6" style={{ color: '#3fb950' }} />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold" style={{ color: '#3fb950' }}>✅ DEPLOYMENT SUCCESSFUL</p>
+                        <p className="text-xs mt-1" style={{ color: '#8b949e' }}>
+                          Repository: <a href={deployResult.repoUrl as string} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: '#58a6ff' }}>{deployResult.repoUrl as string}</a>
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      className="gap-2"
+                      style={{ backgroundColor: '#58a6ff15', color: '#58a6ff' }}
+                      onClick={() => setCurrentView('hosting')}
+                    >
+                      👇 Choose a Free Hosting Platform
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Sidebar — Scheduler & Info */}
@@ -413,6 +551,9 @@ export function DeployView() {
           </Card>
         </div>
       </div>
+
+      {/* Workflow Template */}
+      <WorkflowTemplate />
     </div>
   );
 }
