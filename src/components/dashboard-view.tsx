@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore, type Project, type ProjectStatus } from '@/store/app-store';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Plus,
   Rocket,
@@ -57,9 +63,14 @@ import {
   TrendingUp,
   TrendingDown,
   ExternalLink,
+  ArrowUp,
+  ArrowDown,
+  ChevronDown,
+  Wifi,
+  CalendarDays,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ProjectHealth } from '@/components/project-health';
 import { DeploymentHistory } from '@/components/deployment-history';
 import { ApiUsageTracker } from '@/components/api-usage-tracker';
@@ -108,50 +119,95 @@ function getGreetingEmoji(): string {
 }
 
 /* ============================================================
-   Mini Sparkline Component
+   Relative Time Helper
+   ============================================================ */
+function getRelativeTime(timeStr: string): string {
+  const map: Record<string, number> = {
+    '2m ago': 2, '15m ago': 15, '1h ago': 60, '2h ago': 120, '3h ago': 180, '5h ago': 300,
+  };
+  const minutes = map[timeStr];
+  if (!minutes) return timeStr;
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/* ============================================================
+   Mini Sparkline Component — Rounded tops
    ============================================================ */
 function MiniSparkline({ color, values }: { color: string; values: number[] }) {
   const max = Math.max(...values, 1);
   return (
-    <div className="flex items-end gap-[2px] h-8">
-      {values.map((v, i) => (
-        <motion.div
-          key={i}
-          className="w-1.5 rounded-full"
-          style={{
-            height: `${(v / max) * 100}%`,
-            minHeight: '3px',
-            backgroundColor: color,
-            opacity: 0.35 + (i / values.length) * 0.65,
-          }}
-          initial={{ height: 0 }}
-          animate={{ height: `${(v / max) * 100}%` }}
-          transition={{ delay: 0.3 + i * 0.04, duration: 0.4, ease: 'easeOut' }}
-        />
-      ))}
+    <div className="flex items-end gap-[3px] h-9">
+      {values.map((v, i) => {
+        const heightPct = (v / max) * 100;
+        return (
+          <motion.div
+            key={i}
+            className="relative"
+            style={{ width: 6, height: `${Math.max(heightPct, 8)}%` }}
+            initial={{ height: 0 }}
+            animate={{ height: `${Math.max(heightPct, 8)}%` }}
+            transition={{ delay: 0.3 + i * 0.04, duration: 0.4, ease: 'easeOut' }}
+          >
+            {/* Rounded top cap */}
+            <div
+              className="absolute inset-0 rounded-t-full"
+              style={{
+                backgroundColor: color,
+                opacity: 0.35 + (i / values.length) * 0.65,
+              }}
+            />
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
 
 /* ============================================================
-   Animated Counter Component
+   Animated Counter Component — With pulsing delta arrow
    ============================================================ */
-function AnimatedNumber({ value, color }: { value: number; color: string }) {
+function AnimatedNumber({ value, color, trendUp }: { value: number; color: string; trendUp: boolean }) {
   return (
-    <motion.span
-      className="text-3xl font-bold tabular-nums"
-      style={{
-        background: `linear-gradient(135deg, ${color}, ${color}bb)`,
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text',
-      }}
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-    >
-      {value}
-    </motion.span>
+    <div className="flex items-center gap-1.5">
+      <motion.span
+        className="text-3xl font-bold tabular-nums"
+        style={{
+          background: `linear-gradient(135deg, ${color}, ${color}bb)`,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+      >
+        {value}
+      </motion.span>
+      {/* Pulsing delta arrow */}
+      <motion.div
+        className="flex items-center justify-center w-5 h-5 rounded-full"
+        style={{
+          backgroundColor: trendUp ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)',
+        }}
+        animate={{
+          scale: [1, 1.15, 1],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      >
+        {trendUp ? (
+          <ArrowUp className="w-2.5 h-2.5" style={{ color: '#3fb950' }} />
+        ) : (
+          <ArrowDown className="w-2.5 h-2.5" style={{ color: '#f85149' }} />
+        )}
+      </motion.div>
+    </div>
   );
 }
 
@@ -165,6 +221,10 @@ const SAMPLE_ACTIVITIES = [
   { id: '4', type: 'file_pushed' as const, message: '12 files pushed to "Analytics Dashboard"', time: '2h ago', color: '#58a6ff', view: 'builder' as const },
   { id: '5', type: 'deploy_failed' as const, message: 'Deployment failed for "Blog CMS"', time: '3h ago', color: '#f85149', view: 'deploy' as const },
   { id: '6', type: 'project_created' as const, message: 'Project "Food Delivery API" created', time: '5h ago', color: '#58a6ff', view: 'builder' as const },
+  { id: '7', type: 'deploy_completed' as const, message: 'Deployment completed for "Portfolio Site"', time: '6h ago', color: '#3fb950', view: 'deploy' as const },
+  { id: '8', type: 'file_pushed' as const, message: '5 files pushed to "E-commerce API"', time: '8h ago', color: '#58a6ff', view: 'builder' as const },
+  { id: '9', type: 'deploy_started' as const, message: 'Deployment started for "Docs Generator"', time: '10h ago', color: '#e3b341', view: 'deploy' as const },
+  { id: '10', type: 'deploy_completed' as const, message: 'Deployment completed for "CRM Tool"', time: '12h ago', color: '#3fb950', view: 'deploy' as const },
 ];
 
 function ActivityIcon({ type, color }: { type: string; color: string }) {
@@ -185,7 +245,7 @@ function ActivityIcon({ type, color }: { type: string; color: string }) {
 }
 
 /* ============================================================
-   Quick Actions Config
+   Quick Actions Config — With shortcuts
    ============================================================ */
 const QUICK_ACTIONS = [
   {
@@ -195,6 +255,7 @@ const QUICK_ACTIONS = [
     icon: Hammer,
     color: '#58a6ff',
     view: 'builder' as const,
+    shortcut: '⌘N',
   },
   {
     id: 'deploy',
@@ -203,6 +264,7 @@ const QUICK_ACTIONS = [
     icon: Rocket,
     color: '#3fb950',
     view: 'deploy' as const,
+    shortcut: '⌘3',
   },
   {
     id: 'hosting',
@@ -211,6 +273,7 @@ const QUICK_ACTIONS = [
     icon: Globe,
     color: '#e3b341',
     view: 'hosting' as const,
+    shortcut: '⌘4',
   },
   {
     id: 'chat',
@@ -219,6 +282,7 @@ const QUICK_ACTIONS = [
     icon: MessageSquare,
     color: '#a371f7',
     view: 'chat' as const,
+    shortcut: '⌘5',
   },
 ];
 
@@ -356,6 +420,64 @@ function ImprovementSuggestion({
 }
 
 /* ============================================================
+   Dot Grid Pattern for Hero Background
+   ============================================================ */
+function DotGridPattern() {
+  return (
+    <svg className="absolute inset-0 w-full h-full opacity-[0.03] pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="dotGrid" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="1" fill="#c9d1d9" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#dotGrid)" />
+    </svg>
+  );
+}
+
+/* ============================================================
+   Shimmer Skeleton Loader
+   ============================================================ */
+function ShimmerSkeleton() {
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}>
+      <div className="h-1.5" style={{ background: 'linear-gradient(90deg, #30363d, #484f58, #30363d)', backgroundSize: '200% 100%' }} />
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-3/4 rounded shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+            <div className="h-2 w-1/2 rounded shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="h-6 w-16 rounded-full shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+          <div className="h-6 w-16 rounded-full shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+        </div>
+        <div className="h-8 w-full rounded-lg shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+      </div>
+      <style jsx>{`
+        .shimmer-bg {
+          position: relative;
+          overflow: hidden;
+        }
+        .shimmer-bg::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+          animation: shimmer-sweep 1.5s infinite;
+        }
+        @keyframes shimmer-sweep {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ============================================================
    Dashboard View (Main Component)
    ============================================================ */
 export function DashboardView() {
@@ -363,7 +485,9 @@ export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [frameworkFilter, setFrameworkFilter] = useState('all');
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status'>('recent');
+  const [showAllActivities, setShowAllActivities] = useState(false);
   const { toast } = useToast();
 
   /* ----- Fetch Projects ----- */
@@ -479,20 +603,35 @@ export function DashboardView() {
 
   /* ----- Stats Config with Trend Indicators ----- */
   const stats = [
-    { label: 'Total Projects', value: projects.length, icon: FolderOpen, color: '#58a6ff', sparkline: [2, 4, 3, 5, 4, projects.length], trend: '+12%', trendUp: true },
-    { label: 'Live', value: liveCount, icon: Zap, color: '#3fb950', sparkline: [0, 1, 1, 2, 1, liveCount], trend: '+8%', trendUp: true },
-    { label: 'Building', value: buildingCount, icon: Activity, color: '#e3b341', sparkline: [0, 0, 1, 0, 1, buildingCount], trend: '-3%', trendUp: false },
-    { label: 'Failed', value: failedCount, icon: Rocket, color: '#f85149', sparkline: [0, 0, 0, 1, 0, failedCount], trend: '-15%', trendUp: false },
+    { label: 'Total Projects', value: projects.length, icon: FolderOpen, color: '#58a6ff', sparkline: [2, 4, 3, 5, 4, projects.length], trend: '+12%', trendUp: true, tooltip: `${liveCount} live, ${buildingCount} building, ${failedCount} failed` },
+    { label: 'Live', value: liveCount, icon: Zap, color: '#3fb950', sparkline: [0, 1, 1, 2, 1, liveCount], trend: '+8%', trendUp: true, tooltip: `${liveCount} of ${projects.length} projects deployed` },
+    { label: 'Building', value: buildingCount, icon: Activity, color: '#e3b341', sparkline: [0, 0, 1, 0, 1, buildingCount], trend: '-3%', trendUp: false, tooltip: `${buildingCount} active build jobs` },
+    { label: 'Failed', value: failedCount, icon: Rocket, color: '#f85149', sparkline: [0, 0, 0, 1, 0, failedCount], trend: '-15%', trendUp: false, tooltip: `${failedCount} deployment${failedCount !== 1 ? 's' : ''} need attention` },
   ];
 
-  /* ----- Filtered Projects ----- */
-  const filteredProjects = projects.filter((p) => {
-    const matchesSearch = searchQuery === '' ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesFramework = frameworkFilter === 'all' || p.framework === frameworkFilter;
-    return matchesSearch && matchesFramework;
-  });
+  /* ----- Filtered & Sorted Projects ----- */
+  const filteredProjects = useMemo(() => {
+    const filtered = projects.filter((p) => {
+      const matchesSearch = searchQuery === '' ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesFramework = frameworkFilter === 'all' || p.framework === frameworkFilter;
+      return matchesSearch && matchesFramework;
+    });
+
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'status':
+          const statusOrder: Record<string, number> = { live: 0, building: 1, deploying: 2, failed: 3, not_deployed: 4 };
+          return (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
+        case 'recent':
+        default:
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+    });
+  }, [projects, searchQuery, frameworkFilter, sortBy]);
 
   /* ----- Health Score ----- */
   let healthScore = 50;
@@ -519,14 +658,18 @@ export function DashboardView() {
   /* ----- Footer Stats ----- */
   const totalDeployments = projects.reduce((acc, p) => acc + (p.deployments?.length || 0), 0);
 
+  /* ----- Visible Activities ----- */
+  const visibleActivities = showAllActivities ? SAMPLE_ACTIVITIES : SAMPLE_ACTIVITIES.slice(0, 6);
+
   /* ============================================================
      RENDER
      ============================================================ */
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="space-y-6">
 
       {/* ================================================
-          1. HERO SECTION
+          1. HERO SECTION — ENHANCED
           ================================================ */}
       <motion.div
         initial={{ opacity: 0, y: -15 }}
@@ -534,25 +677,36 @@ export function DashboardView() {
         transition={{ duration: 0.5, ease: 'easeOut' }}
       >
         <div
-          className="rounded-2xl p-6 relative overflow-hidden"
+          className="rounded-2xl p-6 md:p-8 relative overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
             border: '1px solid #30363d',
           }}
         >
-          {/* Decorative gradient orbs */}
+          {/* Dot grid background pattern */}
+          <DotGridPattern />
+
+          {/* Animated gradient orbs */}
           <div
-            className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
+            className="absolute top-0 right-0 w-80 h-80 rounded-full pointer-events-none"
             style={{
-              background: 'radial-gradient(circle, rgba(88,166,255,0.06) 0%, transparent 70%)',
-              transform: 'translate(30%, -40%)',
+              background: 'radial-gradient(circle, rgba(88,166,255,0.08) 0%, transparent 70%)',
+              animation: 'orb-float-1 8s ease-in-out infinite',
             }}
           />
           <div
-            className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none"
+            className="absolute bottom-0 left-0 w-64 h-64 rounded-full pointer-events-none"
             style={{
-              background: 'radial-gradient(circle, rgba(63,185,80,0.04) 0%, transparent 70%)',
-              transform: 'translate(-20%, 30%)',
+              background: 'radial-gradient(circle, rgba(63,185,80,0.06) 0%, transparent 70%)',
+              animation: 'orb-float-2 10s ease-in-out infinite',
+            }}
+          />
+          <div
+            className="absolute top-1/2 left-1/2 w-48 h-48 rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle, rgba(163,113,247,0.04) 0%, transparent 70%)',
+              animation: 'orb-float-3 12s ease-in-out infinite',
+              transform: 'translate(-50%, -50%)',
             }}
           />
 
@@ -560,7 +714,7 @@ export function DashboardView() {
             {/* Greeting + Tagline */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
                   <span
                     style={{
                       background: 'linear-gradient(135deg, #58a6ff, #3fb950)',
@@ -571,9 +725,9 @@ export function DashboardView() {
                   >
                     {getGreeting()}
                   </span>
-                  <span>{getGreetingEmoji()}</span>
+                  <span className="text-3xl">{getGreetingEmoji()}</span>
                 </h1>
-                <p className="text-sm mt-1.5" style={{ color: '#8b949e' }}>
+                <p className="text-sm mt-2 leading-relaxed" style={{ color: '#8b949e' }}>
                   Build, deploy, and host — all in one place
                 </p>
               </div>
@@ -598,9 +752,9 @@ export function DashboardView() {
               </div>
             </div>
 
-            {/* Mini Stats Bar — Glassmorphism */}
+            {/* Quick Stats Row — Icon-based mini metrics */}
             <motion.div
-              className="mt-5 rounded-xl p-3 flex items-center justify-around flex-wrap gap-2"
+              className="mt-6 rounded-xl p-3 flex items-center justify-around flex-wrap gap-3"
               style={{
                 backgroundColor: 'rgba(22, 27, 34, 0.6)',
                 backdropFilter: 'blur(12px)',
@@ -612,17 +766,27 @@ export function DashboardView() {
               transition={{ delay: 0.2, duration: 0.4 }}
             >
               {[
-                { label: 'Total Projects', value: projects.length, color: '#58a6ff' },
-                { label: 'Live', value: liveCount, color: '#3fb950' },
-                { label: 'Building', value: buildingCount, color: '#e3b341' },
-                { label: 'Failed', value: failedCount, color: '#f85149' },
+                { label: 'Builds today', value: 7, color: '#58a6ff', icon: Hammer },
+                { label: 'Deploys this week', value: 25, color: '#3fb950', icon: Rocket },
+                { label: 'AI Messages', value: 142, color: '#a371f7', icon: MessageSquare },
+                { label: 'Uptime', value: '99.9%', color: '#e3b341', icon: Wifi },
               ].map((item, i) => (
-                <div key={item.label} className="flex items-center gap-2">
+                <div key={item.label} className="flex items-center gap-2.5">
                   {i > 0 && (
-                    <div className="w-px h-6 mx-2 hidden sm:block" style={{ backgroundColor: '#30363d' }} />
+                    <div className="w-px h-8 mx-1 hidden sm:block" style={{ backgroundColor: '#30363d' }} />
                   )}
-                  <span className="text-lg font-bold" style={{ color: item.color }}>{item.value}</span>
-                  <span className="text-xs" style={{ color: '#8b949e' }}>{item.label}</span>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${item.color}12` }}
+                  >
+                    <item.icon className="w-4 h-4" style={{ color: item.color }} />
+                  </div>
+                  <div>
+                    <span className="text-base font-bold block leading-tight" style={{ color: item.color }}>
+                      {item.value}
+                    </span>
+                    <span className="text-[10px]" style={{ color: '#8b949e' }}>{item.label}</span>
+                  </div>
                 </div>
               ))}
             </motion.div>
@@ -665,7 +829,7 @@ export function DashboardView() {
       )}
 
       {/* ================================================
-          2. GLASSMORPHISM STATS CARDS WITH TREND INDICATORS
+          2. GLASSMORPHISM STATS CARDS — ENHANCED
           ================================================ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
@@ -678,21 +842,39 @@ export function DashboardView() {
             whileHover={{ y: -4, boxShadow: `0 8px 30px ${stat.color}20` }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           >
-            <Card
-              className="relative overflow-hidden cursor-default"
-              style={{
-                backgroundColor: 'rgba(22, 27, 34, 0.6)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                borderColor: '#30363d',
-                borderTop: `3px solid ${stat.color}`,
-              }}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <AnimatedNumber value={stat.value} color={stat.color} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card
+                  className="relative overflow-hidden cursor-default group"
+                  style={{
+                    backgroundColor: 'rgba(22, 27, 34, 0.6)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderColor: '#30363d',
+                    borderTop: `3px solid ${stat.color}`,
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-2">
+                        <AnimatedNumber value={stat.value} color={stat.color} trendUp={stat.trendUp} />
+                        <p className="text-xs" style={{ color: '#8b949e' }}>{stat.label}</p>
+                        <MiniSparkline color={stat.color} values={stat.sparkline} />
+                      </div>
+                      <div
+                        className="p-2.5 rounded-xl relative"
+                        style={{ backgroundColor: `${stat.color}15` }}
+                      >
+                        <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
+                        {/* Pulsing glow behind icon */}
+                        <div
+                          className="absolute inset-0 rounded-xl animate-pulse-glow"
+                          style={{ backgroundColor: `${stat.color}10` }}
+                        />
+                      </div>
+                    </div>
+                    {/* Trend badge */}
+                    <div className="mt-2 flex items-center gap-1">
                       <motion.span
                         className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                         style={{
@@ -707,34 +889,46 @@ export function DashboardView() {
                         {stat.trend}
                       </motion.span>
                     </div>
-                    <p className="text-xs" style={{ color: '#8b949e' }}>{stat.label}</p>
-                    <MiniSparkline color={stat.color} values={stat.sparkline} />
-                  </div>
+                  </CardContent>
+                  {/* Glassmorphism reflection effect at bottom */}
                   <div
-                    className="p-2.5 rounded-xl relative"
-                    style={{ backgroundColor: `${stat.color}15` }}
-                  >
-                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
-                    {/* Pulsing glow behind icon */}
-                    <div
-                      className="absolute inset-0 rounded-xl animate-pulse-glow"
-                      style={{ backgroundColor: `${stat.color}10` }}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                    className="absolute bottom-0 left-0 right-0 h-8 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{
+                      background: `linear-gradient(to top, ${stat.color}08, transparent)`,
+                    }}
+                  />
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="text-xs"
+                style={{ backgroundColor: '#1c2128', border: '1px solid #30363d', color: '#c9d1d9' }}
+              >
+                {stat.tooltip}
+              </TooltipContent>
+            </Tooltip>
           </motion.div>
         ))}
       </div>
 
       {/* ================================================
-          PROJECT SECTION — SEARCH / FILTER / VIEW TOGGLE
+          PROJECT ANALYTICS — Between Stats and Projects
+          ================================================ */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.4 }}
+      >
+        <ProjectAnalytics />
+      </motion.div>
+
+      {/* ================================================
+          PROJECT SECTION — ENHANCED GRID/TABLE
           ================================================ */}
       {loading ? (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 rounded-lg animate-pulse" style={{ backgroundColor: '#161b22' }} />
+            <ShimmerSkeleton key={i} />
           ))}
         </div>
       ) : projects.length === 0 ? (
@@ -780,14 +974,49 @@ export function DashboardView() {
         >
           <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm" style={{ color: '#8b949e' }}>Your Projects</CardTitle>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#8b949e' }}>
+                  <FolderOpen className="w-4 h-4" />
+                  Your Projects
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 ml-1" style={{ borderColor: '#30363d', color: '#58a6ff' }}>
+                    {filteredProjects.length}
+                  </Badge>
+                </CardTitle>
                 <div className="flex items-center gap-2">
+                  {/* Sort by dropdown */}
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as 'recent' | 'name' | 'status')}
+                      className="pl-3 pr-7 py-1.5 rounded-lg text-xs outline-none appearance-none cursor-pointer transition-colors"
+                      style={{
+                        backgroundColor: '#0d1117',
+                        border: '1px solid #30363d',
+                        color: '#8b949e',
+                      }}
+                    >
+                      <option value="recent" style={{ backgroundColor: '#161b22' }}>Sort: Recent</option>
+                      <option value="name" style={{ backgroundColor: '#161b22' }}>Sort: Name</option>
+                      <option value="status" style={{ backgroundColor: '#161b22' }}>Sort: Status</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none" style={{ color: '#484f58' }} />
+                  </div>
                   {/* View Toggle */}
                   <div
                     className="flex items-center rounded-lg overflow-hidden"
                     style={{ border: '1px solid #30363d' }}
                   >
+                    <button
+                      className="p-1.5 transition-colors"
+                      style={{
+                        backgroundColor: viewMode === 'grid' ? '#30363d' : 'transparent',
+                        color: viewMode === 'grid' ? '#c9d1d9' : '#484f58',
+                      }}
+                      onClick={() => setViewMode('grid')}
+                      title="Grid View"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       className="p-1.5 transition-colors"
                       style={{
@@ -798,17 +1027,6 @@ export function DashboardView() {
                       title="Table View"
                     >
                       <List className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      className="p-1.5 transition-colors"
-                      style={{
-                        backgroundColor: viewMode === 'card' ? '#30363d' : 'transparent',
-                        color: viewMode === 'card' ? '#c9d1d9' : '#484f58',
-                      }}
-                      onClick={() => setViewMode('card')}
-                      title="Card View"
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <Button
@@ -883,7 +1101,161 @@ export function DashboardView() {
                     Clear filters
                   </button>
                 </div>
-              ) : viewMode === 'table' ? (
+              ) : viewMode === 'grid' ? (
+                /* GRID VIEW — Default, modern grid layout */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProjects.map((project, idx) => {
+                    const badge = FRAMEWORK_BADGES[project.framework] || FRAMEWORK_BADGES.express;
+                    const lastDeployment = project.deployments?.[0];
+                    const statusColor = project.status === 'live' ? '#3fb950' : project.status === 'failed' ? '#f85149' : project.status === 'building' || project.status === 'deploying' ? '#e3b341' : '#8b949e';
+                    return (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ delay: idx * 0.06, duration: 0.35, ease: 'easeOut' }}
+                        whileHover={{ y: -4, scale: 1.02, boxShadow: `0 12px 40px ${badge.color}20` }}
+                      >
+                        <Card
+                          className="overflow-hidden cursor-default transition-all duration-300 group relative"
+                          style={{
+                            backgroundColor: '#161b22',
+                            borderColor: '#30363d',
+                            borderLeft: `3px solid ${badge.color}`,
+                          }}
+                        >
+                          {/* Gradient top border per framework */}
+                          <div
+                            className="h-1"
+                            style={{
+                              background: `linear-gradient(90deg, ${badge.color}, ${badge.color}80, transparent)`,
+                            }}
+                          />
+                          <CardContent className="p-4">
+                            {/* Header: Framework badge + Status dot */}
+                            <div className="flex items-center justify-between mb-3">
+                              <span
+                                className="text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5"
+                                style={{ backgroundColor: `${badge.color}18`, color: badge.color }}
+                              >
+                                <FileCode className="w-3 h-3" />
+                                {badge.label}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  className="w-2 h-2 rounded-full"
+                                  style={{
+                                    backgroundColor: statusColor,
+                                    boxShadow: `0 0 6px ${statusColor}60`,
+                                  }}
+                                />
+                                <span className="text-[10px] font-medium" style={{ color: statusColor }}>
+                                  {project.status === 'not_deployed' ? 'Not Deployed' : project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Project Name & Description */}
+                            <h3 className="text-sm font-semibold truncate" style={{ color: '#c9d1d9' }}>{project.name}</h3>
+                            {project.description && (
+                              <p className="text-xs mt-1 line-clamp-2 leading-relaxed" style={{ color: '#8b949e' }}>
+                                {project.description}
+                              </p>
+                            )}
+
+                            {/* Last Deployed + Repo Info — revealed on hover */}
+                            <div className="mt-3 space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3 h-3" style={{ color: '#484f58' }} />
+                                <span className="text-[11px]" style={{ color: '#8b949e' }}>
+                                  {lastDeployment?.completedAt
+                                    ? new Date(lastDeployment.completedAt).toLocaleDateString()
+                                    : 'Never deployed'}
+                                </span>
+                              </div>
+                              {/* Extra info revealed on hover */}
+                              <div className="h-0 group-hover:h-auto overflow-hidden transition-all duration-300">
+                                {project.githubRepoUrl && (
+                                  <a
+                                    href={project.githubRepoUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-[11px] hover:underline"
+                                    style={{ color: '#58a6ff' }}
+                                  >
+                                    <ArrowUpRight className="w-3 h-3" />
+                                    {project.githubRepoUrl.replace('https://github.com/', '')}
+                                  </a>
+                                )}
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <GitBranch className="w-3 h-3" style={{ color: '#484f58' }} />
+                                  <span className="text-[11px]" style={{ color: '#8b949e' }}>
+                                    {project.defaultBranch || 'main'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quick Action Buttons */}
+                            <div
+                              className="flex items-center gap-2 mt-4 pt-3"
+                              style={{ borderTop: '1px solid #21262d' }}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 h-7 text-[11px] flex-1 hover:bg-[#21262d]"
+                                style={{ color: '#58a6ff' }}
+                                onClick={() => { setSelectedProject(project); setCurrentView('builder'); }}
+                              >
+                                <Pencil className="w-3 h-3" /> Edit
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 h-7 text-[11px] flex-1 hover:bg-[#21262d]"
+                                style={{ color: '#3fb950' }}
+                                onClick={() => { setSelectedProject(project); setCurrentView('deploy'); }}
+                              >
+                                <Rocket className="w-3 h-3" /> Deploy
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1 h-7 text-[11px] hover:bg-[#21262d]"
+                                    style={{ color: '#f85149' }}
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle style={{ color: '#c9d1d9' }}>Delete Project</AlertDialogTitle>
+                                    <AlertDialogDescription style={{ color: '#8b949e' }}>
+                                      This will NOT delete your GitHub repository. Only the GitDeploy AI project record will be removed. Confirm?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel style={{ color: '#8b949e' }}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      style={{ backgroundColor: '#f85149', color: 'white' }}
+                                      onClick={() => handleDelete(project.id)}
+                                    >
+                                      Delete Record Only
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
                 /* TABLE VIEW */
                 <div className="overflow-x-auto">
                   <Table>
@@ -902,7 +1274,7 @@ export function DashboardView() {
                         const badge = FRAMEWORK_BADGES[project.framework] || FRAMEWORK_BADGES.express;
                         const lastDeployment = project.deployments?.[0];
                         return (
-                          <TableRow key={project.id} style={{ borderColor: '#21262d' }} className="hover:bg-[#21262d] transition-colors">
+                          <TableRow key={project.id} style={{ borderColor: '#21262d', borderLeft: `3px solid ${badge.color}` }} className="hover:bg-[#21262d] transition-colors">
                             <TableCell>
                               <div>
                                 <p className="text-sm font-medium" style={{ color: '#c9d1d9' }}>{project.name}</p>
@@ -1026,136 +1398,6 @@ export function DashboardView() {
                     </TableBody>
                   </Table>
                 </div>
-              ) : (
-                /* CARD VIEW */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredProjects.map((project, idx) => {
-                    const badge = FRAMEWORK_BADGES[project.framework] || FRAMEWORK_BADGES.express;
-                    const lastDeployment = project.deployments?.[0];
-                    const statusColor = project.status === 'live' ? '#3fb950' : project.status === 'failed' ? '#f85149' : project.status === 'building' || project.status === 'deploying' ? '#e3b341' : '#8b949e';
-                    return (
-                      <motion.div
-                        key={project.id}
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ delay: idx * 0.06, duration: 0.35, ease: 'easeOut' }}
-                        whileHover={{ y: -6, scale: 1.02, boxShadow: `0 12px 40px ${badge.color}25` }}
-                      >
-                        <Card
-                          className="overflow-hidden cursor-default transition-all duration-300"
-                          style={{
-                            backgroundColor: '#161b22',
-                            borderColor: '#30363d',
-                          }}
-                        >
-                          {/* Gradient top border per framework */}
-                          <div
-                            className="h-1.5"
-                            style={{
-                              background: `linear-gradient(90deg, ${badge.color}, ${badge.color}80, transparent)`,
-                            }}
-                          />
-                          <CardContent className="p-4">
-                            {/* Header: Framework badge + Status dot */}
-                            <div className="flex items-center justify-between mb-3">
-                              <span
-                                className="text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5"
-                                style={{ backgroundColor: `${badge.color}18`, color: badge.color }}
-                              >
-                                <FileCode className="w-3 h-3" />
-                                {badge.label}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="w-2 h-2 rounded-full"
-                                  style={{
-                                    backgroundColor: statusColor,
-                                    boxShadow: `0 0 6px ${statusColor}60`,
-                                  }}
-                                />
-                                <span className="text-[10px] font-medium" style={{ color: statusColor }}>
-                                  {project.status === 'not_deployed' ? 'Not Deployed' : project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Project Name & Description */}
-                            <h3 className="text-sm font-semibold truncate" style={{ color: '#c9d1d9' }}>{project.name}</h3>
-                            {project.description && (
-                              <p className="text-xs mt-1 line-clamp-2 leading-relaxed" style={{ color: '#8b949e' }}>
-                                {project.description}
-                              </p>
-                            )}
-
-                            {/* Last Deployed */}
-                            <div className="flex items-center gap-1.5 mt-3">
-                              <Clock className="w-3 h-3" style={{ color: '#484f58' }} />
-                              <span className="text-[11px]" style={{ color: '#8b949e' }}>
-                                {lastDeployment?.completedAt
-                                  ? new Date(lastDeployment.completedAt).toLocaleDateString()
-                                  : 'Never deployed'}
-                              </span>
-                            </div>
-
-                            {/* Quick Action Buttons */}
-                            <div
-                              className="flex items-center gap-2 mt-4 pt-3"
-                              style={{ borderTop: '1px solid #21262d' }}
-                            >
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 h-7 text-[11px] flex-1 hover:bg-[#21262d]"
-                                style={{ color: '#58a6ff' }}
-                                onClick={() => { setSelectedProject(project); setCurrentView('builder'); }}
-                              >
-                                <Pencil className="w-3 h-3" /> Edit
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 h-7 text-[11px] flex-1 hover:bg-[#21262d]"
-                                style={{ color: '#3fb950' }}
-                                onClick={() => { setSelectedProject(project); setCurrentView('deploy'); }}
-                              >
-                                <Rocket className="w-3 h-3" /> Deploy
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="gap-1 h-7 text-[11px] hover:bg-[#21262d]"
-                                    style={{ color: '#f85149' }}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle style={{ color: '#c9d1d9' }}>Delete Project</AlertDialogTitle>
-                                    <AlertDialogDescription style={{ color: '#8b949e' }}>
-                                      This will NOT delete your GitHub repository. Only the GitDeploy AI project record will be removed. Confirm?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel style={{ color: '#8b949e' }}>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      style={{ backgroundColor: '#f85149', color: 'white' }}
-                                      onClick={() => handleDelete(project.id)}
-                                    >
-                                      Delete Record Only
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
-                </div>
               )}
             </CardContent>
           </Card>
@@ -1163,7 +1405,7 @@ export function DashboardView() {
       )}
 
       {/* ================================================
-          3. ENHANCED RECENT ACTIVITY + PROJECT HEALTH
+          3. ENHANCED ACTIVITY TIMELINE + PROJECT HEALTH
           ================================================ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -1274,7 +1516,7 @@ export function DashboardView() {
           </Card>
         </motion.div>
 
-        {/* Recent Activity — Enhanced */}
+        {/* Recent Activity — Enhanced with connecting lines & View All */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1288,60 +1530,80 @@ export function DashboardView() {
                   <Timer className="w-4 h-4" style={{ color: '#58a6ff' }} />
                   <CardTitle className="text-sm" style={{ color: '#c9d1d9' }}>Recent Activity</CardTitle>
                 </div>
-                <Badge variant="outline" className="text-[10px] h-5 px-1.5" style={{ borderColor: '#30363d', color: '#8b949e' }}>
-                  {SAMPLE_ACTIVITIES.length} events
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5" style={{ borderColor: '#30363d', color: '#8b949e' }}>
+                    {SAMPLE_ACTIVITIES.length} events
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] gap-1"
+                    style={{ color: '#58a6ff' }}
+                    onClick={() => setShowAllActivities(!showAllActivities)}
+                  >
+                    {showAllActivities ? 'Show Less' : 'View All'}
+                    <ChevronDown
+                      className="w-3 h-3 transition-transform duration-200"
+                      style={{ transform: showAllActivities ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                    />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-0">
-                {SAMPLE_ACTIVITIES.map((activity, i) => (
-                  <motion.div
-                    key={activity.id}
-                    initial={{ opacity: 0, x: -15 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 + i * 0.08, duration: 0.35, ease: 'easeOut' }}
-                    className="flex items-start gap-3 relative cursor-pointer group rounded-lg px-2 py-1 -mx-2 transition-colors"
-                    style={{ borderLeft: `3px solid ${activity.color}` }}
-                    onClick={() => setCurrentView(activity.view)}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = `${activity.color}08`; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                  >
-                    {/* Timeline line and dot */}
-                    <div className="flex flex-col items-center shrink-0">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 transition-transform duration-200 group-hover:scale-110"
-                        style={{ backgroundColor: `${activity.color}18` }}
-                      >
-                        <ActivityIcon type={activity.type} color={activity.color} />
-                      </div>
-                      {i < SAMPLE_ACTIVITIES.length - 1 && (
+              <div className="space-y-0 max-h-96 overflow-y-auto custom-scrollbar">
+                <AnimatePresence>
+                  {visibleActivities.map((activity, i) => (
+                    <motion.div
+                      key={activity.id}
+                      initial={{ opacity: 0, x: -15 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -15, height: 0 }}
+                      transition={{ delay: 0.1 + i * 0.05, duration: 0.35, ease: 'easeOut' }}
+                      className="flex items-start gap-3 relative cursor-pointer group rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                      onClick={() => setCurrentView(activity.view)}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = `${activity.color}08`; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                    >
+                      {/* Connecting line and dot */}
+                      <div className="flex flex-col items-center shrink-0">
                         <div
-                          className="w-0.5 flex-1 min-h-[24px]"
-                          style={{
-                            background: `linear-gradient(to bottom, ${activity.color}40, #21262d)`,
-                          }}
-                        />
-                      )}
-                    </div>
-                    {/* Content */}
-                    <div className="flex-1 pb-4 group-hover:translate-x-0.5 transition-transform duration-200">
-                      <p className="text-sm font-semibold" style={{ color: '#c9d1d9' }}>{activity.message}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span
-                          className="text-[10px] font-mono"
-                          style={{ color: activity.color }}
+                          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 transition-transform duration-200 group-hover:scale-110"
+                          style={{ backgroundColor: `${activity.color}18` }}
                         >
-                          {activity.time}
-                        </span>
-                        <ChevronRight
-                          className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                          style={{ color: '#484f58' }}
-                        />
+                          <ActivityIcon type={activity.type} color={activity.color} />
+                        </div>
+                        {i < visibleActivities.length - 1 && (
+                          <div
+                            className="w-0.5 flex-1 min-h-[20px]"
+                            style={{
+                              background: `linear-gradient(to bottom, ${activity.color}40, #21262d)`,
+                            }}
+                          />
+                        )}
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+                      {/* Content */}
+                      <div className="flex-1 pb-3 group-hover:translate-x-0.5 transition-transform duration-200">
+                        <p className="text-sm font-medium" style={{ color: '#c9d1d9' }}>{activity.message}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span
+                            className="text-[10px] font-mono"
+                            style={{ color: activity.color }}
+                          >
+                            {getRelativeTime(activity.time)}
+                          </span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: `${activity.color}10`, color: '#8b949e' }}>
+                            {activity.type.replace('_', ' ')}
+                          </span>
+                          <ChevronRight
+                            className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ml-auto"
+                            style={{ color: '#484f58' }}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
               {/* View All Link */}
               <div className="mt-3 pt-3" style={{ borderTop: '1px solid #21262d' }}>
@@ -1361,7 +1623,7 @@ export function DashboardView() {
       </div>
 
       {/* ================================================
-          4. QUICK ACTIONS GRID — REDESIGNED
+          4. QUICK ACTIONS GRID — ENHANCED WITH GRADIENT + SHORTCUTS
           ================================================ */}
       <motion.div
         variants={staggerContainer}
@@ -1378,23 +1640,24 @@ export function DashboardView() {
             <motion.div
               key={action.id}
               variants={staggerItem}
-              whileHover={{ y: -6, boxShadow: `0 12px 40px ${action.color}30` }}
+              whileHover={{ y: -6, scale: 1.03, boxShadow: `0 12px 40px ${action.color}30` }}
               whileTap={{ scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             >
               <Card
-                className="cursor-pointer transition-all duration-300 relative overflow-hidden"
+                className="cursor-pointer transition-all duration-300 relative overflow-hidden group"
                 style={{
                   backgroundColor: '#161b22',
                   borderColor: '#30363d',
                 }}
                 onClick={() => setCurrentView(action.view)}
               >
-                {/* Gradient top accent */}
+                {/* Gradient top accent with cycling animation */}
                 <div
                   className="h-1"
                   style={{
-                    background: `linear-gradient(90deg, ${action.color}, ${action.color}60, transparent)`,
+                    background: `linear-gradient(90deg, ${action.color}, ${action.color}80, transparent)`,
+                    animation: 'gradient-cycle 3s ease-in-out infinite',
                   }}
                 />
                 <CardContent className="p-5">
@@ -1422,22 +1685,28 @@ export function DashboardView() {
                   </div>
                   <h3 className="text-sm font-semibold mt-4" style={{ color: '#c9d1d9' }}>{action.title}</h3>
                   <p className="text-xs mt-1.5 leading-relaxed" style={{ color: '#8b949e' }}>{action.description}</p>
+                  {/* Keyboard shortcut label */}
+                  <div className="mt-3 pt-2.5 flex items-center justify-between" style={{ borderTop: '1px solid #21262d' }}>
+                    <kbd
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono border"
+                      style={{ borderColor: '#30363d', backgroundColor: '#21262d', color: '#8b949e' }}
+                    >
+                      {action.shortcut}
+                    </kbd>
+                    <span className="text-[10px]" style={{ color: '#484f58' }}>Click to open</span>
+                  </div>
                 </CardContent>
+                {/* Hover glow effect */}
+                <div
+                  className="absolute inset-0 rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: `radial-gradient(ellipse at center, ${action.color}08, transparent 70%)`,
+                  }}
+                />
               </Card>
             </motion.div>
           ))}
         </div>
-      </motion.div>
-
-      {/* ================================================
-          PROJECT ANALYTICS
-          ================================================ */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45, duration: 0.4 }}
-      >
-        <ProjectAnalytics />
       </motion.div>
 
       {/* ================================================
@@ -1478,7 +1747,7 @@ export function DashboardView() {
           {[
             { label: 'projects built this week', value: projects.length, color: '#58a6ff', icon: Hammer },
             { label: 'deployments completed', value: totalDeployments, color: '#3fb950', icon: Rocket },
-            { label: 'AI messages sent', value: 0, color: '#a371f7', icon: MessageSquare },
+            { label: 'AI messages sent', value: 142, color: '#a371f7', icon: MessageSquare },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-2">
               <item.icon className="w-3.5 h-3.5" style={{ color: item.color }} />
@@ -1490,5 +1759,6 @@ export function DashboardView() {
       </motion.div>
 
     </div>
+    </TooltipProvider>
   );
 }

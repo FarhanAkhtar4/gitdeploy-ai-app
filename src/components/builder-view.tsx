@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RequirementsCard } from '@/components/requirements-card';
 import { FileTree, buildTreeFromPaths } from '@/components/file-tree';
 import { ProjectTemplates } from '@/components/project-templates';
+import { TemplateMarketplace } from '@/components/template-marketplace';
 import { StatusBadge } from '@/components/status-badge';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -41,7 +42,7 @@ import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type BuilderPhase = 'describe' | 'requirements' | 'file_tree' | 'generating' | 'complete' | 'deploying';
-type BuilderTab = 'chat' | 'templates';
+type BuilderTab = 'chat' | 'templates' | 'marketplace';
 
 /* ─── Quick Start Guide Steps ─── */
 const QUICK_START_STEPS = [
@@ -457,6 +458,9 @@ export function BuilderView() {
                 <TabsTrigger value="templates" className="h-5 text-xs px-2 data-[state=active]:bg-[#30363d] data-[state=active]:text-[#58a6ff]">
                   <LayoutTemplate className="w-3 h-3 mr-1" /> Templates
                 </TabsTrigger>
+                <TabsTrigger value="marketplace" className="h-5 text-xs px-2 data-[state=active]:bg-[#30363d] data-[state=active]:text-[#58a6ff]">
+                  <Sparkles className="w-3 h-3 mr-1" /> Marketplace
+                </TabsTrigger>
               </TabsList>
             </Tabs>
             <Button
@@ -470,8 +474,12 @@ export function BuilderView() {
           </div>
         </div>
 
-        {/* Templates or Chat */}
-        {activeTab === 'templates' && phase === 'describe' ? (
+        {/* Marketplace, Templates or Chat */}
+        {activeTab === 'marketplace' && phase === 'describe' ? (
+          <ScrollArea className="flex-1 p-4">
+            <TemplateMarketplace onSelectTemplate={handleTemplateSelect} />
+          </ScrollArea>
+        ) : activeTab === 'templates' && phase === 'describe' ? (
           <ScrollArea className="flex-1 p-4">
             <ProjectTemplates onSelectTemplate={handleTemplateSelect} />
           </ScrollArea>

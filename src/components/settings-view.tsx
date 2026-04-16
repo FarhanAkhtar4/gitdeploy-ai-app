@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,9 +60,25 @@ import {
   Fingerprint,
   Key,
   Scan,
+  Monitor,
+  Palette,
+  Type,
+  SidebarOpen,
+  Download,
+  ChevronRight,
+  ArrowRight,
+  Webhook,
+  Gauge,
+  Copy,
+  Check,
+  RefreshCw,
+  Server,
+  Code,
+  LayoutGrid,
+  Workflow,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CodeReviewAssistant } from '@/components/code-review-assistant';
 
 /* ─── Circular Progress for API Usage ─── */
@@ -143,6 +159,28 @@ export function SettingsView() {
   const [notifBuild, setNotifBuild] = useState(true);
   const [notifSchedule, setNotifSchedule] = useState(false);
   const [notifMarketing, setNotifMarketing] = useState(false);
+  const [notifWorkflow, setNotifWorkflow] = useState(true);
+
+  // Profile state
+  const [emailNotif, setEmailNotif] = useState(true);
+  const [emailWeekly, setEmailWeekly] = useState(false);
+
+  // Appearance state
+  const [theme, setTheme] = useState<'dark' | 'light' | 'system'>('dark');
+  const [fontSize, setFontSize] = useState('medium');
+  const [compactMode, setCompactMode] = useState(false);
+  const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>('left');
+
+  // API Config state
+  const [apiKey, setApiKey] = useState('gdeploy_sk_••••••••••••••••');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('https://api.example.com/webhook');
+  const [apiKeyCopied, setApiKeyCopied] = useState(false);
+
+  // Danger zone state
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteCountdown, setDeleteCountdown] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // API usage mock data
   const apiUsage = {
@@ -162,7 +200,6 @@ export function SettingsView() {
     if (githubInfo?.scopes?.includes('repo')) score += 20;
     if (githubInfo?.scopes?.includes('workflow')) score += 15;
     if (githubInfo?.validatedAt) score += 15;
-    // Base security from token encryption etc.
     score += 20;
     return Math.min(score, 100);
   })();
@@ -210,7 +247,6 @@ export function SettingsView() {
     setConnectionTestResult('idle');
     setTokenValidationProgress(0);
 
-    // Simulate validation steps
     const steps = [20, 40, 60, 80, 100];
     for (const step of steps) {
       await new Promise(r => setTimeout(r, 400));
@@ -230,6 +266,49 @@ export function SettingsView() {
   const handleSecurityAudit = () => {
     toast({ title: 'Security Audit', description: 'All checks passed! Your account is secure.' });
   };
+
+  const handleGenerateApiKey = () => {
+    const newKey = `gdeploy_sk_${Math.random().toString(36).substring(2, 18)}`;
+    setApiKey(newKey);
+    setShowApiKey(true);
+    toast({ title: 'API Key Generated', description: 'New API key has been generated. Store it safely!' });
+  };
+
+  const handleCopyApiKey = () => {
+    navigator.clipboard.writeText(apiKey);
+    setApiKeyCopied(true);
+    setTimeout(() => setApiKeyCopied(false), 2000);
+  };
+
+  const handleRevokeApiKey = () => {
+    setApiKey('gdeploy_sk_••••••••••••••••');
+    setShowApiKey(false);
+    toast({ title: 'API Key Revoked', description: 'The API key has been revoked.' });
+  };
+
+  const handleExportData = () => {
+    toast({ title: 'Export Data', description: 'Your data export has been started. You will receive an email when it is ready.' });
+  };
+
+  // Delete countdown handler
+  const startDeleteCountdown = useCallback(() => {
+    if (deleteConfirmation !== 'DELETE') return;
+    setDeleteCountdown(5);
+    setIsDeleting(true);
+    const interval = setInterval(() => {
+      setDeleteCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setIsDeleting(false);
+          setDeleteCountdown(0);
+          setDeleteConfirmation('');
+          handleDeleteAccount();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [deleteConfirmation]);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -266,6 +345,28 @@ export function SettingsView() {
     { label: 'Messages', value: 47, icon: MessageSquare, color: '#e3b341' },
   ];
 
+  // API usage bar chart data (mock daily)
+  const dailyUsage = [
+    { day: 'Mon', value: 12 },
+    { day: 'Tue', value: 18 },
+    { day: 'Wed', value: 8 },
+    { day: 'Thu', value: 22 },
+    { day: 'Fri', value: 15 },
+    { day: 'Sat', value: 5 },
+    { day: 'Sun', value: 3 },
+  ];
+
+  // Accent colors
+  const accentColors = [
+    { name: 'Blue', value: '#58a6ff' },
+    { name: 'Green', value: '#3fb950' },
+    { name: 'Purple', value: '#a371f7' },
+    { name: 'Yellow', value: '#e3b341' },
+    { name: 'Pink', value: '#f778ba' },
+    { name: 'Red', value: '#f85149' },
+  ];
+  const [accentColor, setAccentColor] = useState('#58a6ff');
+
   return (
     <div className="space-y-6 max-w-3xl">
       <motion.h1
@@ -281,14 +382,15 @@ export function SettingsView() {
       {/* ============ ENHANCED PROFILE CARD ============ */}
       <motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
         <Card className="overflow-hidden" style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
-          {/* Gradient top banner */}
+          {/* Cover banner image area */}
           <div
-            className="h-20 relative"
-            style={{ background: 'linear-gradient(135deg, #58a6ff20, #3fb95015, #e3b34110)' }}
+            className="h-24 relative"
+            style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020, #e3b34115, #a371f710)' }}
           >
             {/* Decorative orbs */}
-            <div className="absolute top-2 right-8 w-16 h-16 rounded-full" style={{ background: 'radial-gradient(circle, #58a6ff10, transparent)' }} />
-            <div className="absolute top-4 right-24 w-10 h-10 rounded-full" style={{ background: 'radial-gradient(circle, #3fb95010, transparent)' }} />
+            <div className="absolute top-2 right-8 w-20 h-20 rounded-full" style={{ background: 'radial-gradient(circle, #58a6ff15, transparent)' }} />
+            <div className="absolute top-6 right-32 w-12 h-12 rounded-full" style={{ background: 'radial-gradient(circle, #3fb95012, transparent)' }} />
+            <div className="absolute bottom-0 left-1/3 w-24 h-24 rounded-full" style={{ background: 'radial-gradient(circle, #e3b34110, transparent)' }} />
           </div>
 
           <CardContent className="pt-0 pb-6 px-6">
@@ -321,11 +423,10 @@ export function SettingsView() {
                         </AvatarFallback>
                       </Avatar>
                     </motion.div>
-                    {isGithubConnected && (
-                      <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full border-3 flex items-center justify-center" style={{ backgroundColor: '#3fb950', borderColor: '#161b22', borderWidth: '3px' }}>
-                        <CheckCircle className="w-2.5 h-2.5" style={{ color: 'white' }} />
-                      </span>
-                    )}
+                    {/* Account Status indicator */}
+                    <span className="absolute bottom-1 right-1 flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#3fb950', borderWidth: '3px', borderColor: '#161b22' }}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'white' }} />
+                    </span>
                     {/* Edit profile button */}
                     <button
                       className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110"
@@ -341,6 +442,10 @@ export function SettingsView() {
                       <p className="text-lg font-bold" style={{ color: '#c9d1d9' }}>
                         {user.name || 'User'}
                       </p>
+                      {/* Account Status */}
+                      <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#3fb95015', color: '#3fb950', border: '1px solid #3fb95025' }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#3fb950' }} /> Active
+                      </span>
                       {/* Plan badge with upgrade link */}
                       <Badge
                         className="text-xs gap-1 cursor-pointer hover:opacity-90 transition-opacity"
@@ -371,6 +476,52 @@ export function SettingsView() {
                         Member since January 2025
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Email Preferences */}
+                <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                  <p className="text-xs font-medium mb-2.5 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                    <Mail className="w-3 h-3" style={{ color: '#8b949e' }} /> Email Preferences
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px]" style={{ color: '#c9d1d9' }}>Email notifications</p>
+                        <p className="text-[9px]" style={{ color: '#484f58' }}>Receive important updates via email</p>
+                      </div>
+                      <Switch checked={emailNotif} onCheckedChange={setEmailNotif} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px]" style={{ color: '#c9d1d9' }}>Weekly digest</p>
+                        <p className="text-[9px]" style={{ color: '#484f58' }}>Summary of activity each week</p>
+                      </div>
+                      <Switch checked={emailWeekly} onCheckedChange={setEmailWeekly} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notification Preferences (inline) */}
+                <div className="mb-4 p-3 rounded-xl" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                  <p className="text-xs font-medium mb-2.5 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                    <Bell className="w-3 h-3" style={{ color: '#8b949e' }} /> Notification Preferences
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: 'Deploy', state: notifDeploy, setter: setNotifDeploy, icon: Rocket, color: '#3fb950' },
+                      { label: 'Build', state: notifBuild, setter: setNotifBuild, icon: Zap, color: '#e3b341' },
+                      { label: 'Schedule', state: notifSchedule, setter: setNotifSchedule, icon: Clock, color: '#58a6ff' },
+                      { label: 'Workflow', state: notifWorkflow, setter: setNotifWorkflow, icon: Workflow, color: '#a371f7' },
+                    ].map((pref, i) => (
+                      <div key={i} className="flex items-center justify-between px-2.5 py-2 rounded-lg" style={{ backgroundColor: '#161b22' }}>
+                        <div className="flex items-center gap-1.5">
+                          <pref.icon className="w-3 h-3" style={{ color: pref.color }} />
+                          <span className="text-[11px]" style={{ color: '#c9d1d9' }}>{pref.label}</span>
+                        </div>
+                        <Switch checked={pref.state} onCheckedChange={pref.setter} />
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -433,11 +584,8 @@ export function SettingsView() {
           </CardHeader>
           <CardContent>
             <div className="flex items-start gap-6">
-              {/* Circular Usage Meter */}
               <CircularUsageMeter used={apiUsage.used} total={apiUsage.total} />
-
               <div className="flex-1 space-y-4">
-                {/* Category breakdown */}
                 <div>
                   <p className="text-xs font-medium mb-3" style={{ color: '#c9d1d9' }}>Usage by Category</p>
                   <div className="space-y-3">
@@ -460,16 +608,12 @@ export function SettingsView() {
                     ))}
                   </div>
                 </div>
-
-                {/* Remaining count */}
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
                   <span className="text-[11px]" style={{ color: '#8b949e' }}>Remaining this month</span>
                   <span className="text-sm font-bold font-mono" style={{ color: apiUsage.total - apiUsage.used <= 20 ? '#e3b341' : '#3fb950' }}>
                     {apiUsage.total - apiUsage.used}
                   </span>
                 </div>
-
-                {/* Upgrade CTA */}
                 <Button
                   className="w-full gap-1.5 text-xs"
                   style={{
@@ -488,7 +632,7 @@ export function SettingsView() {
         </Card>
       </motion.div>
 
-      {/* ============ GITHUB CONNECTION ============ */}
+      {/* ============ GITHUB CONNECTION ENHANCED ============ */}
       <motion.div custom={2} variants={cardVariants} initial="hidden" animate="visible">
         <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
           <CardHeader>
@@ -496,7 +640,6 @@ export function SettingsView() {
               <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#8b949e' }}>
                 <Github className="w-4 h-4" /> GitHub Connection
               </CardTitle>
-              {/* Connection status animated dot */}
               <div className="flex items-center gap-1.5">
                 <span className="relative flex h-2.5 w-2.5">
                   {isGithubConnected && (
@@ -530,6 +673,51 @@ export function SettingsView() {
                       {githubInfo.tokenHint && ` · Token: ${githubInfo.tokenHint}`}
                     </p>
                   </div>
+                </div>
+
+                {/* Visual Connection Flow Diagram */}
+                <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ backgroundColor: '#30363d' }}>
+                    <Github className="w-3.5 h-3.5" style={{ color: '#c9d1d9' }} />
+                    <span className="text-[10px] font-medium" style={{ color: '#c9d1d9' }}>GitHub</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4" style={{ color: '#3fb950' }} />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ backgroundColor: '#58a6ff15', border: '1px solid #58a6ff25' }}>
+                    <Zap className="w-3.5 h-3.5" style={{ color: '#58a6ff' }} />
+                    <span className="text-[10px] font-medium" style={{ color: '#58a6ff' }}>GitDeploy</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4" style={{ color: '#3fb950' }} />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg" style={{ backgroundColor: '#3fb95015', border: '1px solid #3fb95025' }}>
+                    <Globe className="w-3.5 h-3.5" style={{ color: '#3fb950' }} />
+                    <span className="text-[10px] font-medium" style={{ color: '#3fb950' }}>Hosting</span>
+                  </div>
+                </div>
+
+                {/* Last Sync + Sync Status */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                    <p className="text-[9px] uppercase font-semibold" style={{ color: '#484f58' }}>Last Sync</p>
+                    <p className="text-[11px] font-mono mt-0.5" style={{ color: '#8b949e' }}>
+                      {githubInfo.validatedAt ? new Date(githubInfo.validatedAt).toLocaleString() : 'Never'}
+                    </p>
+                  </div>
+                  <div className="px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                    <p className="text-[9px] uppercase font-semibold" style={{ color: '#484f58' }}>Sync Status</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <RefreshCw className="w-3 h-3" style={{ color: '#3fb950' }} />
+                      <span className="text-[11px]" style={{ color: '#3fb950' }}>Up to date</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Repository count */}
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                  <span className="text-[11px]" style={{ color: '#8b949e' }}>Repositories</span>
+                  <span className="text-[11px] font-mono font-medium" style={{ color: '#58a6ff' }}>5 repos</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                  <span className="text-[11px]" style={{ color: '#8b949e' }}>Most Active</span>
+                  <span className="text-[11px] font-mono font-medium" style={{ color: '#e3b341' }}>my-nextjs-app</span>
                 </div>
 
                 {/* Token Validation Progress Bar */}
@@ -572,16 +760,6 @@ export function SettingsView() {
                     ))}
                   </div>
                 </div>
-
-                {/* Last Activity */}
-                {githubInfo.validatedAt && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: '#0d1117' }}>
-                    <Clock className="w-3.5 h-3.5" style={{ color: '#8b949e' }} />
-                    <span className="text-[10px]" style={{ color: '#8b949e' }}>
-                      Last activity: {new Date(githubInfo.validatedAt).toLocaleString()}
-                    </span>
-                  </div>
-                )}
 
                 <div className="flex gap-2">
                   <Button
@@ -668,9 +846,7 @@ export function SettingsView() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex items-center gap-6">
-              {/* Larger circular SVG score */}
               <SecurityScoreRing score={securityScore} />
-
               <div className="flex-1 space-y-2.5">
                 {securityRecommendations.map((rec, i) => {
                   const Icon = rec.icon;
@@ -693,7 +869,6 @@ export function SettingsView() {
                 })}
               </div>
             </div>
-
             <Button
               variant="outline"
               size="sm"
@@ -707,19 +882,254 @@ export function SettingsView() {
         </Card>
       </motion.div>
 
-      {/* ============ PREFERENCES ============ */}
+      {/* ============ API CONFIGURATION ============ */}
       <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible">
         <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#8b949e' }}>
-              <Activity className="w-4 h-4" /> Preferences
+              <Key className="w-4 h-4" style={{ color: '#58a6ff' }} /> API Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* API Key Management */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <Key className="w-3 h-3" style={{ color: '#8b949e' }} /> API Key
+              </Label>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Input
+                    value={showApiKey ? apiKey : apiKey.replace(/./g, '•').slice(0, 24)}
+                    readOnly
+                    className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] font-mono text-xs pr-10"
+                  />
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-[#30363d] transition-colors"
+                    style={{ color: '#8b949e' }}
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    title={showApiKey ? 'Hide' : 'Show'}
+                  >
+                    {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 shrink-0"
+                  style={{ borderColor: '#30363d', color: '#58a6ff' }}
+                  onClick={handleCopyApiKey}
+                >
+                  {apiKeyCopied ? <Check className="w-3 h-3" style={{ color: '#3fb950' }} /> : <Copy className="w-3 h-3" />}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 shrink-0"
+                  style={{ borderColor: '#30363d', color: '#3fb950' }}
+                  onClick={handleGenerateApiKey}
+                >
+                  <RefreshCw className="w-3 h-3" /> Generate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 shrink-0"
+                  style={{ borderColor: '#f8514950', color: '#f85149' }}
+                  onClick={handleRevokeApiKey}
+                >
+                  Revoke
+                </Button>
+              </div>
+            </div>
+
+            {/* Webhook URL */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <Webhook className="w-3 h-3" style={{ color: '#8b949e' }} /> Webhook URL
+              </Label>
+              <Input
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] font-mono text-xs"
+                placeholder="https://api.example.com/webhook"
+              />
+            </div>
+
+            {/* Rate Limit Display */}
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4" style={{ color: '#e3b341' }} />
+                <div>
+                  <p className="text-[11px] font-medium" style={{ color: '#c9d1d9' }}>Rate Limit</p>
+                  <p className="text-[9px]" style={{ color: '#484f58' }}>100 requests per minute</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono" style={{ color: '#3fb950' }}>73/min remaining</span>
+            </div>
+
+            {/* Usage Statistics Bar Chart */}
+            <div>
+              <p className="text-xs font-medium mb-2.5 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                <BarChart3 className="w-3 h-3" style={{ color: '#8b949e' }} /> Usage This Week
+              </p>
+              <div className="flex items-end gap-1.5 h-20 px-1">
+                {dailyUsage.map((d, i) => {
+                  const maxVal = Math.max(...dailyUsage.map(x => x.value));
+                  const heightPct = (d.value / maxVal) * 100;
+                  return (
+                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+                      <motion.div
+                        className="w-full rounded-t"
+                        style={{ backgroundColor: '#58a6ff', minHeight: 2 }}
+                        initial={{ height: 0 }}
+                        animate={{ height: `${heightPct}%` }}
+                        transition={{ delay: 0.2 + i * 0.05, duration: 0.5, ease: 'easeOut' }}
+                      />
+                      <span className="text-[8px]" style={{ color: '#484f58' }}>{d.day}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ============ APPEARANCE & PREFERENCES ============ */}
+      <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible">
+        <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#8b949e' }}>
+              <Palette className="w-4 h-4" style={{ color: '#a371f7' }} /> Appearance & Preferences
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Theme Selector */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <Monitor className="w-3 h-3" style={{ color: '#8b949e' }} /> Theme
+              </Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'dark' as const, label: 'Dark', icon: Moon, preview: '#0d1117' },
+                  { value: 'light' as const, label: 'Light', icon: Sun, preview: '#ffffff' },
+                  { value: 'system' as const, label: 'System', icon: Monitor, preview: 'linear-gradient(135deg, #0d1117 50%, #ffffff 50%)' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl border transition-all duration-200"
+                    style={{
+                      borderColor: theme === t.value ? '#58a6ff' : '#21262d',
+                      backgroundColor: theme === t.value ? '#58a6ff08' : '#0d1117',
+                    }}
+                    onClick={() => setTheme(t.value)}
+                  >
+                    <div
+                      className="w-10 h-7 rounded-md border"
+                      style={{
+                        background: t.preview,
+                        borderColor: '#30363d',
+                      }}
+                    />
+                    <div className="flex items-center gap-1">
+                      <t.icon className="w-3 h-3" style={{ color: theme === t.value ? '#58a6ff' : '#8b949e' }} />
+                      <span className="text-[10px] font-medium" style={{ color: theme === t.value ? '#58a6ff' : '#8b949e' }}>{t.label}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Font Size */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <Type className="w-3 h-3" style={{ color: '#8b949e' }} /> Font Size
+              </Label>
+              <Select value={fontSize} onValueChange={setFontSize}>
+                <SelectTrigger className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#161b22] border-[#30363d]">
+                  <SelectItem value="small" className="text-xs text-[#c9d1d9]">Small (12px)</SelectItem>
+                  <SelectItem value="medium" className="text-xs text-[#c9d1d9]">Medium (14px)</SelectItem>
+                  <SelectItem value="large" className="text-xs text-[#c9d1d9]">Large (16px)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator style={{ backgroundColor: '#21262d' }} />
+
+            {/* Compact Mode */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium" style={{ color: '#c9d1d9' }}>Compact Mode</p>
+                <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>Reduce spacing and show more content</p>
+              </div>
+              <Switch checked={compactMode} onCheckedChange={setCompactMode} />
+            </div>
+
+            {/* Sidebar Position */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <SidebarOpen className="w-3 h-3" style={{ color: '#8b949e' }} /> Sidebar Position
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['left', 'right'] as const).map((pos) => (
+                  <button
+                    key={pos}
+                    className="flex items-center justify-center gap-2 p-2.5 rounded-lg border transition-all duration-200"
+                    style={{
+                      borderColor: sidebarPosition === pos ? '#58a6ff' : '#21262d',
+                      backgroundColor: sidebarPosition === pos ? '#58a6ff08' : '#0d1117',
+                      color: sidebarPosition === pos ? '#58a6ff' : '#8b949e',
+                    }}
+                    onClick={() => setSidebarPosition(pos)}
+                  >
+                    <ChevronRight className={`w-3 h-3 ${pos === 'right' ? 'rotate-180' : ''}`} />
+                    <span className="text-[11px] font-medium capitalize">{pos}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Accent Color Picker */}
+            <div>
+              <Label className="text-xs flex items-center gap-1.5 mb-2" style={{ color: '#c9d1d9' }}>
+                <Palette className="w-3 h-3" style={{ color: '#8b949e' }} /> Accent Color
+              </Label>
+              <div className="flex items-center gap-2">
+                {accentColors.map((c) => (
+                  <button
+                    key={c.name}
+                    className="w-7 h-7 rounded-full border-2 transition-all duration-200 hover:scale-110"
+                    style={{
+                      backgroundColor: c.value,
+                      borderColor: accentColor === c.value ? 'white' : 'transparent',
+                      boxShadow: accentColor === c.value ? `0 0 10px ${c.value}50` : 'none',
+                    }}
+                    onClick={() => setAccentColor(c.value)}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* ============ PROJECT DEFAULTS ============ */}
+      <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible">
+        <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#8b949e' }}>
+              <LayoutGrid className="w-4 h-4" style={{ color: '#3fb950' }} /> Project Defaults
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             {/* Default Framework */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
-                <Globe className="w-3 h-3" style={{ color: '#8b949e' }} /> Default Framework
+                <Code className="w-3 h-3" style={{ color: '#8b949e' }} /> Default Framework
               </Label>
               <Select value={defaultFramework} onValueChange={setDefaultFramework}>
                 <SelectTrigger className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] text-xs">
@@ -759,41 +1169,49 @@ export function SettingsView() {
               <Switch checked={autoDeploy} onCheckedChange={setAutoDeploy} />
             </div>
 
-            <Separator style={{ backgroundColor: '#21262d' }} />
+            {/* Default Hosting Platform */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                <Globe className="w-3 h-3" style={{ color: '#8b949e' }} /> Default Hosting Platform
+              </Label>
+              <Select defaultValue="vercel">
+                <SelectTrigger className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#161b22] border-[#30363d]">
+                  <SelectItem value="vercel" className="text-xs text-[#c9d1d9]">Vercel</SelectItem>
+                  <SelectItem value="netlify" className="text-xs text-[#c9d1d9]">Netlify</SelectItem>
+                  <SelectItem value="railway" className="text-xs text-[#c9d1d9]">Railway</SelectItem>
+                  <SelectItem value="render" className="text-xs text-[#c9d1d9]">Render</SelectItem>
+                  <SelectItem value="flyio" className="text-xs text-[#c9d1d9]">Fly.io</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            {/* Notification Preferences */}
-            <div className="space-y-3">
-              <p className="text-xs font-medium flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
-                <Bell className="w-3 h-3" style={{ color: '#8b949e' }} /> Notification Preferences
-              </p>
-              {[
-                { label: 'Deployment alerts', desc: 'Notify when deployments succeed or fail', state: notifDeploy, setter: setNotifDeploy },
-                { label: 'Build notifications', desc: 'Notify when builds complete', state: notifBuild, setter: setNotifBuild },
-                { label: 'Schedule reminders', desc: 'Remind about scheduled deployments', state: notifSchedule, setter: setNotifSchedule },
-                { label: 'Product updates', desc: 'New features and announcements', state: notifMarketing, setter: setNotifMarketing },
-              ].map((pref, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs" style={{ color: '#c9d1d9' }}>{pref.label}</p>
-                    <p className="text-[10px]" style={{ color: '#484f58' }}>{pref.desc}</p>
-                  </div>
-                  <Switch checked={pref.state} onCheckedChange={pref.setter} />
-                </div>
-              ))}
+            {/* Build Command Template */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                <Terminal className="w-3 h-3" style={{ color: '#8b949e' }} /> Build Command Template
+              </Label>
+              <Input
+                defaultValue="npm run build"
+                className="bg-[#0d1117] border-[#30363d] text-[#c9d1d9] font-mono text-xs"
+                placeholder="npm run build"
+              />
             </div>
           </CardContent>
         </Card>
       </motion.div>
 
       {/* ============ CODE REVIEW ASSISTANT ============ */}
-      <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible">
+      <motion.div custom={7} variants={cardVariants} initial="hidden" animate="visible">
         <CodeReviewAssistant />
       </motion.div>
 
       {/* ============ ENHANCED DANGER ZONE ============ */}
-      <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible">
+      <motion.div custom={8} variants={cardVariants} initial="hidden" animate="visible">
         <Card className="overflow-hidden" style={{ backgroundColor: '#161b22', borderColor: '#f8514950' }}>
-          {/* Red gradient top border - more visually striking */}
+          {/* Red gradient top border */}
           <div
             className="h-1.5 relative"
             style={{ background: 'linear-gradient(90deg, #f85149, #da3633, #b62324, #da3633, #f85149)' }}
@@ -823,8 +1241,29 @@ export function SettingsView() {
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Export Data button */}
             <div
               className="flex items-center justify-between p-4 rounded-xl transition-all duration-200"
+              style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
+            >
+              <div>
+                <p className="text-xs font-semibold" style={{ color: '#c9d1d9' }}>Export Data</p>
+                <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>Download all your data before taking destructive actions</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 shrink-0"
+                style={{ borderColor: '#30363d', color: '#58a6ff' }}
+                onClick={handleExportData}
+              >
+                <Download className="w-3 h-3" /> Export
+              </Button>
+            </div>
+
+            {/* Delete Account - 2-step confirmation */}
+            <div
+              className="p-4 rounded-xl transition-all duration-200"
               style={{
                 backgroundColor: '#0d1117',
                 border: '1px solid #f8514920',
@@ -838,44 +1277,72 @@ export function SettingsView() {
                 (e.currentTarget as HTMLElement).style.background = '#0d1117';
               }}
             >
-              <div>
-                <p className="text-xs font-semibold" style={{ color: '#c9d1d9' }}>Delete Account</p>
-                <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>Permanently delete your account and all associated data</p>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs font-semibold" style={{ color: '#c9d1d9' }}>Delete Account</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>Permanently delete your account and all associated data</p>
+                </div>
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              {/* 2-step confirmation input */}
+              <div className="space-y-2">
+                <p className="text-[10px]" style={{ color: '#f85149' }}>
+                  Type <strong>DELETE</strong> to confirm:
+                </p>
+                <Input
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder="Type DELETE to confirm"
+                  className="bg-[#161b22] border-[#f8514930] text-[#c9d1d9] text-xs font-mono"
+                />
+                {deleteConfirmation === 'DELETE' && !isDeleting && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1 shrink-0"
-                    style={{ borderColor: '#f85149', color: '#f85149' }}
+                    className="gap-1 w-full"
+                    style={{ borderColor: '#f85149', color: '#f85149', backgroundColor: '#f8514910' }}
+                    onClick={startDeleteCountdown}
                   >
-                    <Trash2 className="w-3 h-3" /> Delete
+                    <Trash2 className="w-3 h-3" /> Delete Account
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent style={{ backgroundColor: '#161b22', borderColor: '#f85149' }}>
-                  <AlertDialogHeader>
-                    <div className="flex items-center gap-2 mb-1">
-                      <AlertTriangle className="w-5 h-5" style={{ color: '#f85149' }} />
-                      <AlertDialogTitle style={{ color: '#c9d1d9' }}>Delete Account</AlertDialogTitle>
+                )}
+                {isDeleting && (
+                  <div className="space-y-2">
+                    {/* Progress indicator */}
+                    <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#21262d' }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: '#f85149' }}
+                        initial={{ width: '100%' }}
+                        animate={{ width: '0%' }}
+                        transition={{ duration: deleteCountdown, ease: 'linear' }}
+                      />
                     </div>
-                    <AlertDialogDescription style={{ color: '#8b949e' }}>
-                      This action cannot be undone. This will permanently delete your account and remove all your data from our servers.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel style={{ color: '#8b949e' }}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      style={{ backgroundColor: '#f85149', color: 'white' }}
-                      onClick={handleDeleteAccount}
+                    {/* Countdown timer */}
+                    <div className="flex items-center justify-center gap-2 py-2">
+                      <AlertTriangle className="w-4 h-4" style={{ color: '#f85149' }} />
+                      <span className="text-sm font-bold" style={{ color: '#f85149' }}>
+                        Deleting in {deleteCountdown}s...
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      style={{ borderColor: '#30363d', color: '#8b949e' }}
+                      onClick={() => {
+                        setIsDeleting(false);
+                        setDeleteCountdown(0);
+                        setDeleteConfirmation('');
+                      }}
                     >
-                      <Trash2 className="w-3 h-3 mr-1" /> Delete Account
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* Delete All Data */}
             <div
               className="flex items-center justify-between p-4 rounded-xl transition-all duration-200"
               style={{

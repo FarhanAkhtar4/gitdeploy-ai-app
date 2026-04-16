@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore, type ChatMessage } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,10 +39,40 @@ import {
   Workflow,
   Terminal,
   ChevronRight,
+  ChevronDown,
   Lightbulb,
   RotateCcw,
+  Mic,
+  Share2,
+  Star,
+  Search,
+  History,
+  CpuIcon,
+  Activity,
+  Hash,
+  Monitor,
+  Database,
+  ArrowRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+/* ─── Popular Questions FAQ ─── */
+const POPULAR_QUESTIONS = [
+  { q: 'How do I deploy a Next.js app to Vercel?', a: 'Connect your GitHub repo, configure build settings, and deploy with zero-config. Vercel auto-detects Next.js and sets up preview deployments for every PR.' },
+  { q: 'What\'s the best CI/CD pipeline for a monorepo?', a: 'Use GitHub Actions with path-based triggers. Configure separate workflows for each package, share caching across jobs, and use matrix builds for parallel testing.' },
+  { q: 'How do I set up Docker for my Node.js app?', a: 'Start with a multi-stage Dockerfile: use node:20-alpine as builder, copy package.json first for caching, then copy source. Expose your port and add health checks.' },
+  { q: 'How to configure custom domains with SSL?', a: 'Most platforms (Vercel, Netlify) auto-provision SSL via Let\'s Encrypt. Add your domain in DNS settings, create a CNAME record pointing to the platform, and SSL is handled automatically.' },
+  { q: 'What are GitHub Actions best practices?', a: 'Cache dependencies, use matrix builds for parallelism, pin action versions with SHA, use secrets for credentials, and set timeout-minutes to prevent runaway workflows.' },
+  { q: 'How do I implement blue-green deployments?', a: 'Maintain two identical environments. Route traffic to the "blue" (live) environment. Deploy to "green", test it, then switch the router. Rollback by switching back to blue.' },
+];
+
+/* ─── Recent Activity Timeline ─── */
+const RECENT_ACTIVITY_ITEMS = [
+  { icon: Rocket, text: 'Deployed my-app to Vercel', time: '5 min ago', color: '#3fb950' },
+  { icon: GitBranch, text: 'Merged PR #42 into main', time: '1 hour ago', color: '#a371f7' },
+  { icon: AlertCircle, text: 'Build failed on staging branch', time: '3 hours ago', color: '#f85149' },
+  { icon: Check, text: 'All tests passed in CI pipeline', time: '5 hours ago', color: '#3fb950' },
+];
 
 /* ─── Left Panel: Conversation Topic Chips ─── */
 const CONVERSATION_TOPICS = [
@@ -68,22 +98,22 @@ const QUICK_ACTIONS = [
 /* ─── Context-aware Quick Action Chips ─── */
 const CONTEXT_CHIPS = {
   default: [
-    { icon: Bug, label: 'Fix a bug', color: '#f85149' },
-    { icon: Code, label: 'Review my code', color: '#58a6ff' },
-    { icon: Rocket, label: 'Deploy my app', color: '#3fb950' },
-    { icon: Lightbulb, label: 'Suggest improvements', color: '#e3b341' },
+    { icon: Bug, label: 'Fix a bug', color: '#f85149', tooltip: 'Debug and fix code issues' },
+    { icon: Code, label: 'Review my code', color: '#58a6ff', tooltip: 'Get AI-powered code review' },
+    { icon: Rocket, label: 'Deploy my app', color: '#3fb950', tooltip: 'Deploy to any platform' },
+    { icon: Lightbulb, label: 'Suggest improvements', color: '#e3b341', tooltip: 'AI improvement suggestions' },
   ],
   deployment: [
-    { icon: Container, label: 'Docker setup', color: '#58a6ff' },
-    { icon: RotateCcw, label: 'Rollback guide', color: '#f85149' },
-    { icon: Globe, label: 'Custom domain', color: '#3fb950' },
-    { icon: Zap, label: 'Optimize build', color: '#e3b341' },
+    { icon: Container, label: 'Docker setup', color: '#58a6ff', tooltip: 'Containerize your app' },
+    { icon: RotateCcw, label: 'Rollback guide', color: '#f85149', tooltip: 'How to rollback a deployment' },
+    { icon: Globe, label: 'Custom domain', color: '#3fb950', tooltip: 'Configure custom domains' },
+    { icon: Zap, label: 'Optimize build', color: '#e3b341', tooltip: 'Speed up your build' },
   ],
   cicd: [
-    { icon: Workflow, label: 'Add workflow', color: '#a371f7' },
-    { icon: TestTube, label: 'Add tests', color: '#f85149' },
-    { icon: Shield, label: 'Security scan', color: '#79c0ff' },
-    { icon: Zap, label: 'Cache deps', color: '#e3b341' },
+    { icon: Workflow, label: 'Add workflow', color: '#a371f7', tooltip: 'Create CI/CD workflow' },
+    { icon: TestTube, label: 'Add tests', color: '#f85149', tooltip: 'Set up automated tests' },
+    { icon: Shield, label: 'Security scan', color: '#79c0ff', tooltip: 'Security vulnerability scan' },
+    { icon: Zap, label: 'Cache deps', color: '#e3b341', tooltip: 'Optimize dependency caching' },
   ],
 };
 
@@ -109,6 +139,45 @@ const AI_CAPABILITIES = [
   { icon: GitBranch, title: 'Workflow Help', desc: 'Build & optimize CI/CD pipelines', color: '#3fb950' },
   { icon: Globe, title: 'Hosting Advice', desc: 'Compare platforms & setup guides', color: '#e3b341' },
 ];
+
+/* ─── Quick References for Right Sidebar ─── */
+const QUICK_REFERENCES = [
+  { title: 'Deploy to Vercel', code: 'npx vercel --prod', lang: 'bash' },
+  { title: 'Docker Build', code: 'docker build -t myapp .', lang: 'bash' },
+  { title: 'GitHub Actions YML', code: `on:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: ubuntu-latest`, lang: 'yaml' },
+];
+
+/* ─── Quick Reference Item (separate component for hook rules) ─── */
+function QuickReferenceItem({ ref: refItem }: { ref: { title: string; code: string; lang: string } }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div>
+      <button
+        className="w-full flex items-center justify-between text-[11px] px-2.5 py-2 rounded-lg transition-colors hover:bg-[#21262d]"
+        style={{ color: '#8b949e' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span>{refItem.title}</span>
+        <ChevronDown
+          className="w-3 h-3 transition-transform"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        />
+      </button>
+      {expanded && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          className="mt-1 rounded-lg overflow-hidden"
+          style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
+        >
+          <pre className="p-2 text-[9px] font-mono overflow-x-auto custom-scroll" style={{ color: '#c9d1d9' }}>
+            {refItem.code}
+          </pre>
+        </motion.div>
+      )}
+    </div>
+  );
+}
 
 /* ─── Bouncing Typing Indicator ─── */
 function TypingIndicator() {
@@ -152,6 +221,26 @@ function CopyButton({ text }: { text: string }) {
       title="Copy message"
     >
       {copied ? <Check className="w-3 h-3" style={{ color: '#3fb950' }} /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
+
+/* ─── Share Button ─── */
+function ShareButton({ text }: { text: string }) {
+  const [shared, setShared] = useState(false);
+  const handleShare = () => {
+    navigator.clipboard.writeText(text);
+    setShared(true);
+    setTimeout(() => setShared(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleShare}
+      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[#30363d]"
+      style={{ color: '#8b949e' }}
+      title="Share message"
+    >
+      {shared ? <Check className="w-3 h-3" style={{ color: '#3fb950' }} /> : <Share2 className="w-3 h-3" />}
     </button>
   );
 }
@@ -214,7 +303,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
     let keyIdx = 0;
 
     while (remaining.length > 0) {
-      // Check for comments
       const commentIdx = remaining.indexOf('//');
       const hashCommentIdx = remaining.indexOf('#');
       let earliestComment = -1;
@@ -225,7 +313,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
         commentChar = '//';
       }
       if (hashCommentIdx !== -1 && language !== 'json' && (earliestComment === -1 || hashCommentIdx < earliestComment)) {
-        // YAML/bash comments with #
         if (language === 'yaml' || language === 'yml' || language === 'bash' || language === 'sh' || !language) {
           if (earliestComment === -1 || hashCommentIdx < earliestComment) {
             earliestComment = hashCommentIdx;
@@ -247,7 +334,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
       if (earliestComment > 0) {
         const before = remaining.slice(0, earliestComment);
         const comment = remaining.slice(earliestComment);
-        // Process before part for keywords/strings
         elements.push(...highlightLinePart(before, lineIdx, keyIdx));
         keyIdx += 10;
         elements.push(
@@ -259,7 +345,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
         break;
       }
 
-      // Check for strings
       const stringMatch = remaining.match(/^(.*?)((?:"[^"]*")|(?:'[^']*')|(?:`[^`]*`))/);
       if (stringMatch && stringMatch[2]) {
         const beforeStr = stringMatch[1];
@@ -275,7 +360,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
         continue;
       }
 
-      // No more patterns, just highlight keywords
       elements.push(...highlightLinePart(remaining, lineIdx, keyIdx));
       remaining = '';
     }
@@ -289,7 +373,6 @@ function highlightCode(code: string, language: string): React.ReactNode[] {
 
 function highlightLinePart(text: string, lineIdx: number, startKey: number): React.ReactNode[] {
   const result: React.ReactNode[] = [];
-  // Split by word boundaries to check keywords
   const parts = text.split(/(\b)/);
   let keyCounter = startKey;
 
@@ -311,7 +394,7 @@ function highlightLinePart(text: string, lineIdx: number, startKey: number): Rea
   return result;
 }
 
-/* ─── Code Block Renderer with Syntax Highlighting ─── */
+/* ─── Code Block Renderer with Syntax Highlighting + Line Numbers ─── */
 function MessageContent({ content }: { content: string }) {
   const parts = content.split(/(```[\s\S]*?```)/g);
 
@@ -323,6 +406,8 @@ function MessageContent({ content }: { content: string }) {
           const firstNewline = lines.indexOf('\n');
           const language = firstNewline > 0 ? lines.slice(0, firstNewline).trim() : '';
           const code = firstNewline > 0 ? lines.slice(firstNewline + 1) : lines;
+          const codeLines = code.split('\n');
+          const lineCount = codeLines.length;
 
           return (
             <div
@@ -338,28 +423,42 @@ function MessageContent({ content }: { content: string }) {
                   <div className="flex items-center gap-1.5">
                     <Code className="w-3 h-3" style={{ color: '#58a6ff' }} />
                     <span>{language}</span>
+                    <span style={{ color: '#484f58' }}>{lineCount} lines</span>
                   </div>
                   <CopyButton text={code} />
                 </div>
               )}
               {!language && (
                 <div
-                  className="px-3 py-1 text-[10px] font-mono flex items-center justify-end"
+                  className="px-3 py-1 text-[10px] font-mono flex items-center justify-between"
                   style={{ backgroundColor: '#161b22', color: '#8b949e', borderBottom: '1px solid #21262d' }}
                 >
+                  <span style={{ color: '#484f58' }}>{lineCount} lines</span>
                   <CopyButton text={code} />
                 </div>
               )}
-              <pre className="p-3 overflow-x-auto custom-scroll">
-                <code className="text-xs font-mono leading-relaxed">
-                  {highlightCode(code, language)}
-                </code>
-              </pre>
+              <div className="flex">
+                {/* Line numbers column */}
+                <div
+                  className="select-none py-3 pl-3 pr-2 text-right shrink-0"
+                  style={{ color: '#484f58', borderRight: '1px solid #21262d', backgroundColor: '#0d1117' }}
+                >
+                  {codeLines.map((_, lineIdx) => (
+                    <div key={lineIdx} className="text-[10px] font-mono leading-relaxed">
+                      {lineIdx + 1}
+                    </div>
+                  ))}
+                </div>
+                <pre className="p-3 overflow-x-auto custom-scroll flex-1">
+                  <code className="text-xs font-mono leading-relaxed">
+                    {highlightCode(code, language)}
+                  </code>
+                </pre>
+              </div>
             </div>
           );
         }
 
-        // Handle bold text
         const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
         return (
           <span key={i} className="whitespace-pre-wrap font-mono text-xs leading-relaxed" style={{ color: '#c9d1d9' }}>
@@ -372,7 +471,6 @@ function MessageContent({ content }: { content: string }) {
                 );
               }
 
-              // Handle inline code
               const textParts = bp.split(/(`[^`]+`)/g);
               return textParts.map((tp, k) => {
                 if (tp.startsWith('`') && tp.endsWith('`')) {
@@ -396,6 +494,44 @@ function MessageContent({ content }: { content: string }) {
   );
 }
 
+/* ─── New Message Glow Effect ─── */
+function NewMessageGlow({ children, messageId }: { children: React.ReactNode; messageId: string }) {
+  const [glowing, setGlowing] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setGlowing(false), 3000);
+    return () => clearTimeout(timer);
+  }, [messageId]);
+
+  return (
+    <motion.div
+      animate={glowing ? {
+        boxShadow: ['0 0 0px rgba(88,166,255,0)', '0 0 15px rgba(88,166,255,0.3)', '0 0 0px rgba(88,166,255,0)'],
+      } : {}}
+      transition={glowing ? { duration: 1.5, repeat: 2 } : { duration: 0.3 }}
+      style={{ borderRadius: '16px' }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ─── AI Mode Selector ─── */
+type AIMode = 'creative' | 'balanced' | 'precise';
+const AI_MODES: { value: AIMode; label: string; icon: React.ElementType; color: string; desc: string }[] = [
+  { value: 'creative', label: 'Creative', icon: Sparkles, color: '#a371f7', desc: 'More exploratory, creative solutions' },
+  { value: 'balanced', label: 'Balanced', icon: Zap, color: '#58a6ff', desc: 'Balanced approach, best for most tasks' },
+  { value: 'precise', label: 'Precise', icon: Target, color: '#3fb950', desc: 'Focused, accurate, technical answers' },
+];
+
+function Target(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
 export function ChatView() {
   const { chatMessages, addChatMessage, clearChatMessages } = useAppStore();
   const [input, setInput] = useState('');
@@ -405,11 +541,35 @@ export function ChatView() {
   const [charCount, setCharCount] = useState(0);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [contextType, setContextType] = useState<'default' | 'deployment' | 'cicd'>('default');
+  const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
+  const [topicSearch, setTopicSearch] = useState('');
+  const [aiMode, setAIMode] = useState<AIMode>('balanced');
+  const [showAIModeMenu, setShowAIModeMenu] = useState(false);
+  const [showVoiceIndicator, setShowVoiceIndicator] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const aiModeRef = useRef<HTMLDivElement>(null);
+
+  // Session stats
+  const sessionStats = useMemo(() => {
+    const userMsgs = chatMessages.filter(m => m.role === 'user').length;
+    const assistantMsgs = chatMessages.filter(m => m.role === 'assistant').length;
+    return { total: chatMessages.length, userMsgs, assistantMsgs };
+  }, [chatMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Close AI mode menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (aiModeRef.current && !aiModeRef.current.contains(e.target as Node)) {
+        setShowAIModeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // Detect context from last message
   useEffect(() => {
@@ -462,7 +622,6 @@ export function ChatView() {
         timestamp: new Date().toISOString(),
       });
 
-      // Check if AI response contains a diff
       if (aiContent.includes('---') && aiContent.includes('+++') && aiContent.includes('@@')) {
         setDiffContent(aiContent);
         setShowDiff(true);
@@ -485,15 +644,19 @@ export function ChatView() {
   };
 
   const currentChips = CONTEXT_CHIPS[contextType];
+  const currentMode = AI_MODES.find(m => m.value === aiMode)!;
+  const filteredTopics = CONVERSATION_TOPICS.filter(t =>
+    t.label.toLowerCase().includes(topicSearch.toLowerCase())
+  );
 
   return (
     <div className="flex h-[calc(100vh-140px)]">
-      {/* ─── Left Panel: Conversation Topics ─── */}
+      {/* ─── Left Panel: Enhanced with Search, Favorites, Topics, History ─── */}
       <AnimatePresence>
         {leftPanelOpen && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 220, opacity: 1 }}
+            animate={{ width: 240, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="border-r overflow-hidden flex-shrink-0 hidden md:block"
@@ -502,7 +665,7 @@ export function ChatView() {
             <div className="p-3 space-y-3 h-full overflow-y-auto custom-scroll">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#484f58' }}>
-                  Topics
+                  Explore
                 </h3>
                 <button
                   onClick={() => setLeftPanelOpen(false)}
@@ -513,38 +676,98 @@ export function ChatView() {
                 </button>
               </div>
 
-              {/* Topic chips */}
-              <div className="space-y-1.5">
-                {CONVERSATION_TOPICS.map((topic, i) => {
-                  const Icon = topic.icon;
-                  return (
-                    <motion.button
-                      key={topic.label}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04, duration: 0.25 }}
-                      className="w-full flex items-center gap-2 text-[11px] px-2.5 py-2 rounded-lg transition-all duration-200 hover:bg-[#161b22] text-left group"
-                      style={{ color: '#8b949e', border: '1px solid transparent' }}
-                      onClick={() => sendMessage(topic.question)}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = `${topic.color}40`;
-                        (e.currentTarget as HTMLElement).style.color = '#c9d1d9';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
-                        (e.currentTarget as HTMLElement).style.color = '#8b949e';
-                      }}
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: '#484f58' }} />
+                <input
+                  type="text"
+                  value={topicSearch}
+                  onChange={(e) => setTopicSearch(e.target.value)}
+                  placeholder="Search topics..."
+                  className="w-full text-[11px] pl-7 pr-3 py-1.5 rounded-lg border focus:outline-none focus:border-[#58a6ff] transition-colors"
+                  style={{ backgroundColor: '#161b22', borderColor: '#21262d', color: '#c9d1d9' }}
+                />
+              </div>
+
+              {/* Favorites section */}
+              <div>
+                <h4 className="text-[9px] font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1" style={{ color: '#484f58' }}>
+                  <Star className="w-2.5 h-2.5" style={{ color: '#e3b341' }} /> Favorites
+                </h4>
+                <div className="space-y-0.5">
+                  {[
+                    { label: 'Deploy Next.js to Vercel', color: '#3fb950' },
+                    { label: 'Docker Compose Setup', color: '#58a6ff' },
+                  ].map((fav) => (
+                    <button
+                      key={fav.label}
+                      className="w-full flex items-center gap-2 text-[10px] px-2 py-1.5 rounded-lg transition-colors hover:bg-[#161b22] text-left"
+                      style={{ color: '#8b949e' }}
+                      onClick={() => sendMessage(fav.label)}
                     >
-                      <div
-                        className="p-1 rounded shrink-0 group-hover:scale-110 transition-transform"
-                        style={{ backgroundColor: `${topic.color}15` }}
+                      <Star className="w-2.5 h-2.5 shrink-0" style={{ color: '#e3b341' }} />
+                      <span className="truncate">{fav.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Topics */}
+              <div>
+                <h4 className="text-[9px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#484f58' }}>
+                  Topics
+                </h4>
+                <div className="space-y-1">
+                  {filteredTopics.map((topic, i) => {
+                    const Icon = topic.icon;
+                    return (
+                      <motion.button
+                        key={topic.label}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04, duration: 0.25 }}
+                        className="w-full flex items-center gap-2 text-[11px] px-2.5 py-2 rounded-lg transition-all duration-200 hover:bg-[#161b22] text-left group cursor-grab active:cursor-grabbing"
+                        style={{ color: '#8b949e', border: '1px solid transparent' }}
+                        onClick={() => sendMessage(topic.question)}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.borderColor = `${topic.color}40`;
+                          (e.currentTarget as HTMLElement).style.color = '#c9d1d9';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
+                          (e.currentTarget as HTMLElement).style.color = '#8b949e';
+                        }}
                       >
-                        <Icon className="w-3 h-3" style={{ color: topic.color }} />
-                      </div>
-                      <span className="truncate">{topic.label}</span>
-                    </motion.button>
-                  );
-                })}
+                        <div
+                          className="p-1 rounded shrink-0 group-hover:scale-110 transition-transform"
+                          style={{ backgroundColor: `${topic.color}15` }}
+                        >
+                          <Icon className="w-3 h-3" style={{ color: topic.color }} />
+                        </div>
+                        <span className="truncate">{topic.label}</span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Conversation History */}
+              <div>
+                <h4 className="text-[9px] font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1" style={{ color: '#484f58' }}>
+                  <History className="w-2.5 h-2.5" /> History
+                </h4>
+                <div className="space-y-0.5">
+                  {RECENT_CONVERSATIONS.map((conv) => (
+                    <button
+                      key={conv.title}
+                      className="w-full text-left px-2 py-1.5 rounded-lg transition-colors hover:bg-[#161b22]"
+                      onClick={() => sendMessage(`Continue: ${conv.title}`)}
+                    >
+                      <p className="text-[10px] truncate" style={{ color: '#8b949e' }}>{conv.title}</p>
+                      <p className="text-[9px] mt-0.5" style={{ color: '#484f58' }}>{conv.time}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Help text */}
@@ -621,79 +844,215 @@ export function ChatView() {
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-4 max-w-3xl mx-auto">
             {chatMessages.length === 0 && !showDiff && (
-              /* ─── Better Empty State ─── */
-              <div className="text-center py-10 flex flex-col items-center">
-                {/* Larger Sparkles icon with pulsing ring */}
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.5, type: 'spring' }}
-                  className="relative w-20 h-20 rounded-2xl mx-auto flex items-center justify-center mb-5"
-                  style={{ backgroundColor: '#58a6ff10' }}
-                >
-                  <Sparkles className="w-10 h-10" style={{ color: '#58a6ff' }} />
-                  {/* Pulsing ring */}
-                  <div className="absolute inset-[-4px] rounded-2xl animate-pulse-ring"
-                    style={{
-                      border: '2px solid transparent',
-                      backgroundImage: 'linear-gradient(#161b22, #161b22), linear-gradient(135deg, #58a6ff, #3fb950, #e3b341)',
-                      backgroundOrigin: 'border-box',
-                      backgroundClip: 'padding-box, border-box',
-                    }}
-                  />
-                </motion.div>
+              /* ─── Enhanced Empty State ─── */
+              <div className="py-6">
+                {/* Animated gradient mesh background */}
+                <div className="relative rounded-2xl overflow-hidden mb-6" style={{ border: '1px solid #30363d' }}>
+                  {/* Gradient mesh BG */}
+                  <div className="absolute inset-0 opacity-30">
+                    <div className="absolute top-0 left-1/4 w-48 h-48 rounded-full" style={{ background: 'radial-gradient(circle, #58a6ff20, transparent)', animation: 'float 6s ease-in-out infinite' }} />
+                    <div className="absolute bottom-0 right-1/4 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(circle, #3fb95020, transparent)', animation: 'float 8s ease-in-out infinite reverse' }} />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56 rounded-full" style={{ background: 'radial-gradient(circle, #a371f720, transparent)', animation: 'float 7s ease-in-out infinite' }} />
+                  </div>
 
-                {/* Gradient text title */}
-                <h3
-                  className="text-xl font-bold mb-2"
-                  style={{
-                    backgroundImage: 'linear-gradient(135deg, #58a6ff, #3fb950)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
-                  AI Deployment Assistant
-                </h3>
-                <p className="text-sm max-w-md mx-auto" style={{ color: '#8b949e' }}>
-                  Ask about deployment failures, workflow changes, or hosting recommendations
-                </p>
+                  <div className="relative p-8 text-center" style={{ backgroundColor: '#0d111780' }}>
+                    {/* Sparkles icon with pulsing ring */}
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.5, type: 'spring' }}
+                      className="relative w-20 h-20 rounded-2xl mx-auto flex items-center justify-center mb-4"
+                      style={{ backgroundColor: '#58a6ff10' }}
+                    >
+                      <Sparkles className="w-10 h-10" style={{ color: '#58a6ff' }} />
+                      <div className="absolute inset-[-4px] rounded-2xl animate-pulse-ring"
+                        style={{
+                          border: '2px solid transparent',
+                          backgroundImage: 'linear-gradient(#161b22, #161b22), linear-gradient(135deg, #58a6ff, #3fb950, #e3b341)',
+                          backgroundOrigin: 'border-box',
+                          backgroundClip: 'padding-box, border-box',
+                        }}
+                      />
+                    </motion.div>
 
-                {/* Quick action cards in 2x2 grid with better hierarchy */}
-                <div className="grid grid-cols-2 gap-2.5 max-w-lg mx-auto mt-6 w-full">
-                  {QUICK_ACTIONS.map((action, i) => {
-                    const Icon = action.icon;
-                    return (
-                      <motion.button
-                        key={action.label}
-                        initial={{ opacity: 0, y: 10 }}
+                    <h3
+                      className="text-xl font-bold mb-2"
+                      style={{
+                        backgroundImage: 'linear-gradient(135deg, #58a6ff, #3fb950)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                      }}
+                    >
+                      AI Deployment Assistant
+                    </h3>
+                    <p className="text-sm max-w-md mx-auto" style={{ color: '#8b949e' }}>
+                      Ask about deployment failures, workflow changes, or hosting recommendations
+                    </p>
+
+                    {/* Quick action cards 2x2 */}
+                    <div className="grid grid-cols-2 gap-2.5 max-w-lg mx-auto mt-6 w-full">
+                      {QUICK_ACTIONS.map((action, i) => {
+                        const Icon = action.icon;
+                        return (
+                          <motion.button
+                            key={action.label}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 + i * 0.1, duration: 0.3 }}
+                            className="flex items-start gap-3 text-left px-4 py-3 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 group"
+                            style={{ borderColor: '#30363d', backgroundColor: '#0d1117' }}
+                            onClick={() => sendMessage(action.label)}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLElement).style.borderColor = action.color;
+                              (e.currentTarget as HTMLElement).style.background = `linear-gradient(135deg, ${action.color}08, #0d1117)`;
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLElement).style.borderColor = '#30363d';
+                              (e.currentTarget as HTMLElement).style.background = '#0d1117';
+                            }}
+                          >
+                            <div
+                              className="p-2 rounded-lg shrink-0 group-hover:scale-110 transition-transform"
+                              style={{ backgroundColor: `${action.color}15` }}
+                            >
+                              <Icon className="w-4 h-4" style={{ color: action.color }} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate" style={{ color: '#c9d1d9' }}>{action.label}</p>
+                              <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>{action.desc}</p>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Popular Questions FAQ */}
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold mb-3 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                    <MessageCircle className="w-3.5 h-3.5" style={{ color: '#58a6ff' }} /> Popular Questions
+                  </h3>
+                  <div className="space-y-1.5">
+                    {POPULAR_QUESTIONS.map((faq, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 + i * 0.1, duration: 0.3 }}
-                        className="flex items-start gap-3 text-left px-4 py-3 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 group"
-                        style={{ borderColor: '#30363d', backgroundColor: '#0d1117' }}
-                        onClick={() => sendMessage(action.label)}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = action.color;
-                          (e.currentTarget as HTMLElement).style.background = `linear-gradient(135deg, ${action.color}08, #0d1117)`;
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = '#30363d';
-                          (e.currentTarget as HTMLElement).style.background = '#0d1117';
-                        }}
+                        transition={{ delay: 0.1 + i * 0.05, duration: 0.25 }}
                       >
-                        <div
-                          className="p-2 rounded-lg shrink-0 group-hover:scale-110 transition-transform"
-                          style={{ backgroundColor: `${action.color}15` }}
+                        <button
+                          className="w-full text-left px-3 py-2.5 rounded-lg border transition-all duration-200"
+                          style={{
+                            backgroundColor: expandedFAQ === i ? '#161b22' : '#0d1117',
+                            borderColor: expandedFAQ === i ? '#58a6ff40' : '#21262d',
+                          }}
+                          onClick={() => setExpandedFAQ(expandedFAQ === i ? null : i)}
                         >
-                          <Icon className="w-4 h-4" style={{ color: action.color }} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium truncate" style={{ color: '#c9d1d9' }}>{action.label}</p>
-                          <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>{action.desc}</p>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-medium" style={{ color: '#c9d1d9' }}>{faq.q}</p>
+                            <ChevronDown
+                              className="w-3 h-3 shrink-0 transition-transform duration-200"
+                              style={{
+                                color: '#484f58',
+                                transform: expandedFAQ === i ? 'rotate(180deg)' : 'rotate(0deg)',
+                              }}
+                            />
+                          </div>
+                          <AnimatePresence>
+                            {expandedFAQ === i && (
+                              <motion.p
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="text-[10px] mt-2 leading-relaxed overflow-hidden"
+                                style={{ color: '#8b949e' }}
+                              >
+                                {faq.a}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recent Activity Timeline */}
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold mb-3 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                    <Clock className="w-3.5 h-3.5" style={{ color: '#3fb950' }} /> Recent Activity
+                  </h3>
+                  <div className="space-y-0">
+                    {RECENT_ACTIVITY_ITEMS.map((item, i) => {
+                      const Icon = item.icon;
+                      return (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.1 + i * 0.06, duration: 0.25 }}
+                          className="flex items-center gap-3 py-2 relative"
+                        >
+                          {i < RECENT_ACTIVITY_ITEMS.length - 1 && (
+                            <div className="absolute left-[11px] top-8 bottom-0 w-px" style={{ backgroundColor: '#21262d' }} />
+                          )}
+                          <div
+                            className="p-1.5 rounded-md shrink-0 z-10"
+                            style={{ backgroundColor: `${item.color}15` }}
+                          >
+                            <Icon className="w-3 h-3" style={{ color: item.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px]" style={{ color: '#c9d1d9' }}>{item.text}</p>
+                            <p className="text-[9px]" style={{ color: '#484f58' }}>{item.time}</p>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* AI Capabilities Showcase - 4 cards */}
+                <div>
+                  <h3 className="text-xs font-semibold mb-3 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                    <Cpu className="w-3.5 h-3.5" style={{ color: '#a371f7' }} /> AI Capabilities
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {AI_CAPABILITIES.map((cap, i) => {
+                      const Icon = cap.icon;
+                      return (
+                        <motion.button
+                          key={cap.title}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 + i * 0.06, duration: 0.3 }}
+                          className="flex items-start gap-2.5 px-3 py-3 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 group text-left"
+                          style={{ borderColor: '#21262d', backgroundColor: '#0d1117' }}
+                          onClick={() => sendMessage(`Help me with ${cap.title.toLowerCase()}`)}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.borderColor = `${cap.color}50`;
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.borderColor = '#21262d';
+                          }}
+                        >
+                          <div
+                            className="p-2 rounded-lg shrink-0 group-hover:scale-110 transition-transform"
+                            style={{ backgroundColor: `${cap.color}15` }}
+                          >
+                            <Icon className="w-4 h-4" style={{ color: cap.color }} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium" style={{ color: '#c9d1d9' }}>{cap.title}</p>
+                            <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>{cap.desc}</p>
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -752,41 +1111,56 @@ export function ChatView() {
                         <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
                       )}
                     </div>
-                    {/* AI avatar pulsing ring */}
                     {msg.role === 'assistant' && (
                       <div className="absolute inset-0 rounded-xl animate-pulse-ring" style={{ border: '1.5px solid rgba(88,166,255,0.3)' }} />
                     )}
                   </div>
                   <div className={`max-w-[80%] group relative ${msg.role === 'user' ? 'text-right' : ''}`}>
-                    <div
-                      className="rounded-2xl px-4 py-3 text-sm"
-                      style={{
-                        backgroundColor: msg.role === 'user'
-                          ? '#2d333b'
-                          : undefined,
-                        border: msg.role === 'user'
-                          ? '1px solid #444c56'
-                          : '1px solid #21262d',
-                        // Gradient background for assistant messages
-                        ...(msg.role === 'assistant' ? {
-                          background: 'linear-gradient(135deg, #161b22 0%, #0d1117 50%, #161b22 100%)',
-                          borderLeft: '2px solid transparent',
-                          borderImage: 'linear-gradient(to bottom, #58a6ff, #3fb950) 1',
-                          borderImageSlice: 1,
-                        } : {}),
-                        color: '#c9d1d9',
-                      }}
-                    >
-                      <MessageContent content={msg.content} />
-                    </div>
-                    {/* Timestamp + Copy + Reactions */}
-                    <div className={`flex items-center gap-2 mt-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <NewMessageGlow messageId={msg.id}>
+                      <div
+                        className="rounded-2xl px-4 py-3 text-sm"
+                        style={{
+                          backgroundColor: msg.role === 'user'
+                            ? undefined
+                            : undefined,
+                          border: msg.role === 'user'
+                            ? '1px solid #444c56'
+                            : '1px solid #21262d',
+                          // Gradient bg for user messages (dark blue tint)
+                          ...(msg.role === 'user' ? {
+                            background: 'linear-gradient(135deg, #1a2744, #1e2d4a, #1a2744)',
+                          } : {
+                            // Gradient bg for assistant messages
+                            background: 'linear-gradient(135deg, #161b22 0%, #0d1117 50%, #161b22 100%)',
+                            borderLeft: '2px solid transparent',
+                            borderImage: 'linear-gradient(to bottom, #58a6ff, #3fb950) 1',
+                            borderImageSlice: 1,
+                          }),
+                          color: '#c9d1d9',
+                        }}
+                      >
+                        <MessageContent content={msg.content} />
+                      </div>
+                    </NewMessageGlow>
+                    {/* Timestamp + Copy + Share + Reactions */}
+                    <div className={`flex items-center gap-1.5 mt-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <span className="text-[10px]" style={{ color: '#484f58' }}>
                         {formatTimestamp(msg.timestamp)}
                       </span>
                       <CopyButton text={msg.content} />
+                      <ShareButton text={msg.content} />
                       {msg.role === 'assistant' && (
-                        <MessageReactions messageId={msg.id} />
+                        <>
+                          <MessageReactions messageId={msg.id} />
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[#30363d]"
+                            style={{ color: '#8b949e' }}
+                            title="Regenerate response"
+                            onClick={() => sendMessage('Regenerate the last response')}
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -824,9 +1198,57 @@ export function ChatView() {
         {/* ─── Enhanced Input Area ─── */}
         <div className="px-4 py-3 border-t" style={{ borderColor: '#30363d' }}>
           <div className="max-w-3xl mx-auto">
+            {/* AI Mode Selector */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="relative" ref={aiModeRef}>
+                <button
+                  className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border transition-all duration-200"
+                  style={{
+                    backgroundColor: `${currentMode.color}10`,
+                    color: currentMode.color,
+                    borderColor: `${currentMode.color}30`,
+                  }}
+                  onClick={() => setShowAIModeMenu(!showAIModeMenu)}
+                >
+                  <currentMode.icon className="w-2.5 h-2.5" />
+                  {currentMode.label}
+                  <ChevronDown className="w-2.5 h-2.5" />
+                </button>
+                {showAIModeMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className="absolute bottom-full mb-1 left-0 w-48 rounded-lg border shadow-xl z-50 overflow-hidden"
+                    style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}
+                  >
+                    {AI_MODES.map((mode) => {
+                      const MIcon = mode.icon;
+                      return (
+                        <button
+                          key={mode.value}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-[#21262d]"
+                          onClick={() => {
+                            setAIMode(mode.value);
+                            setShowAIModeMenu(false);
+                          }}
+                        >
+                          <MIcon className="w-3.5 h-3.5" style={{ color: mode.color }} />
+                          <div>
+                            <p className="text-[11px] font-medium" style={{ color: aiMode === mode.value ? mode.color : '#c9d1d9' }}>{mode.label}</p>
+                            <p className="text-[9px]" style={{ color: '#484f58' }}>{mode.desc}</p>
+                          </div>
+                          {aiMode === mode.value && <Check className="w-3 h-3 ml-auto" style={{ color: mode.color }} />}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                {/* Attach file button (mock) */}
+                {/* Attach file button */}
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
                   <button
                     className="p-1 rounded-md transition-colors hover:bg-[#30363d]"
@@ -864,6 +1286,23 @@ export function ChatView() {
                   </span>
                 )}
               </div>
+
+              {/* Voice input button */}
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-xl shrink-0 h-[44px] w-[44px] transition-all duration-300"
+                style={{ borderColor: '#30363d', color: showVoiceIndicator ? '#f85149' : '#484f58' }}
+                title="Voice input (coming soon)"
+                onClick={() => {
+                  setShowVoiceIndicator(!showVoiceIndicator);
+                  setTimeout(() => setShowVoiceIndicator(false), 2000);
+                }}
+              >
+                <Mic className="w-4 h-4" />
+              </Button>
+
+              {/* Send button */}
               <Button
                 size="icon"
                 disabled={!input.trim() || isLoading}
@@ -883,7 +1322,7 @@ export function ChatView() {
               </Button>
             </div>
 
-            {/* ─── Quick Action Suggestion Chips Below Input ─── */}
+            {/* ─── Quick Action Suggestion Chips with Tooltips ─── */}
             <div className="flex items-center gap-1.5 mt-2 overflow-x-auto custom-scroll pb-0.5">
               <span className="text-[9px] shrink-0 mr-0.5" style={{ color: '#484f58' }}>Suggest:</span>
               {currentChips.map((chip, i) => {
@@ -894,7 +1333,7 @@ export function ChatView() {
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05, duration: 0.2 }}
-                    className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full shrink-0 transition-all duration-200 hover:scale-105"
+                    className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full shrink-0 transition-all duration-200 hover:scale-105 relative group/chip"
                     style={{
                       backgroundColor: `${chip.color}10`,
                       color: chip.color,
@@ -909,9 +1348,16 @@ export function ChatView() {
                       (e.currentTarget as HTMLElement).style.backgroundColor = `${chip.color}10`;
                       (e.currentTarget as HTMLElement).style.borderColor = `${chip.color}25`;
                     }}
+                    title={chip.tooltip}
                   >
                     <Icon className="w-2.5 h-2.5" />
                     {chip.label}
+                    {/* Tooltip on hover */}
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded text-[9px] whitespace-nowrap opacity-0 group-hover/chip:opacity-100 transition-opacity pointer-events-none z-10"
+                      style={{ backgroundColor: '#21262d', color: '#c9d1d9', border: '1px solid #30363d' }}
+                    >
+                      {chip.tooltip}
+                    </span>
                   </motion.button>
                 );
               })}
@@ -920,9 +1366,46 @@ export function ChatView() {
         </div>
       </div>
 
-      {/* ─── Right Sidebar Panel ─── */}
+      {/* ─── Enhanced Right Sidebar Panel ─── */}
       <div className="w-72 border-l hidden lg:block overflow-y-auto custom-scroll" style={{ borderColor: '#30363d', backgroundColor: '#161b22' }}>
         <div className="p-4 space-y-5">
+          {/* AI Model Info Card */}
+          <div>
+            <h3 className="text-xs font-semibold mb-2.5 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+              <Monitor className="w-3.5 h-3.5" style={{ color: '#58a6ff' }} /> AI Model Info
+            </h3>
+            <div
+              className="p-3 rounded-xl space-y-2.5"
+              style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Model</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#58a6ff' }}>GPT-4o</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Context Window</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#3fb950' }}>128K tokens</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Avg Response</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#e3b341' }}>1.2s</span>
+              </div>
+              {/* Token Usage mini progress */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px]" style={{ color: '#8b949e' }}>Token Usage</span>
+                  <span className="text-[9px] font-mono" style={{ color: '#58a6ff' }}>2,847 / 128K</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#21262d' }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: '#58a6ff', width: '2.2%' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Conversation Topics */}
           <div>
             <h3 className="text-xs font-semibold mb-2.5 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
@@ -963,6 +1446,58 @@ export function ChatView() {
                   <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>{conv.time}</p>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Quick References */}
+          <div>
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#484f58' }}>
+              <Hash className="w-3 h-3" /> Quick References
+            </h3>
+            <div className="space-y-1.5">
+              {QUICK_REFERENCES.map((ref, i) => (
+                <QuickReferenceItem key={i} ref={ref} />
+              ))}
+                        <div className="flex justify-end px-2 pb-1.5">
+                          <CopyButton text={ref.code} />
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Session Stats */}
+          <div>
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5" style={{ color: '#484f58' }}>
+              <Activity className="w-3 h-3" /> Session Stats
+            </h3>
+            <div
+              className="p-3 rounded-xl space-y-2"
+              style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Messages</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#58a6ff' }}>{sessionStats.total}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Your messages</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#3fb950' }}>{sessionStats.userMsgs}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>AI responses</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#a371f7' }}>{sessionStats.assistantMsgs}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Topics discussed</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#e3b341' }}>{Math.min(sessionStats.total, 10)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px]" style={{ color: '#8b949e' }}>Avg response time</span>
+                <span className="text-[10px] font-mono font-medium" style={{ color: '#79c0ff' }}>1.2s</span>
+              </div>
             </div>
           </div>
 
