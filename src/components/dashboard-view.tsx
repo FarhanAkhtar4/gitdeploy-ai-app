@@ -106,16 +106,16 @@ const staggerItem = {
    ============================================================ */
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return 'Good Morning';
+  if (hour < 18) return 'Good Afternoon';
+  return 'Good Evening';
 }
 
 function getGreetingEmoji(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return '\u2600\uFE0F';
-  if (hour < 18) return '\uD83C\uDF05';
-  return '\uD83C\uDF19';
+  if (hour < 12) return '\uD83C\uDF05';  // 🌅 sunrise
+  if (hour < 18) return '\u2600\uFE0F';  // ☀️ sun
+  return '\uD83C\uDF19';  // 🌙 moon
 }
 
 /* ============================================================
@@ -167,9 +167,34 @@ function MiniSparkline({ color, values }: { color: string; values: number[] }) {
 }
 
 /* ============================================================
-   Animated Counter Component — With pulsing delta arrow
+   Animated Counter Component — With number counting effect
    ============================================================ */
 function AnimatedNumber({ value, color, trendUp }: { value: number; color: string; trendUp: boolean }) {
+  const [displayValue, setDisplayValue] = React.useState(0);
+  const [hasAnimated, setHasAnimated] = React.useState(false);
+
+  React.useEffect(() => {
+    if (hasAnimated) return;
+    const duration = 1200;
+    const startTime = Date.now();
+    const startValue = 0;
+    const endValue = value;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(Math.round(startValue + (endValue - startValue) * eased));
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setHasAnimated(true);
+      }
+    };
+    requestAnimationFrame(animate);
+  }, [value, hasAnimated]);
+
   return (
     <div className="flex items-center gap-1.5">
       <motion.span
@@ -184,7 +209,7 @@ function AnimatedNumber({ value, color, trendUp }: { value: number; color: strin
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
       >
-        {value}
+        {displayValue}
       </motion.span>
       {/* Pulsing delta arrow */}
       <motion.div
@@ -436,43 +461,87 @@ function DotGridPattern() {
 }
 
 /* ============================================================
-   Shimmer Skeleton Loader
+   Floating Orbs — Animated background particles
+   ============================================================ */
+function FloatingOrbs() {
+  const orbs = React.useMemo(() => [
+    { x: '10%', y: '20%', size: 80, color: 'rgba(88,166,255,0.06)', delay: 0, duration: 7 },
+    { x: '75%', y: '15%', size: 60, color: 'rgba(63,185,80,0.05)', delay: 1.5, duration: 9 },
+    { x: '50%', y: '60%', size: 50, color: 'rgba(163,113,247,0.04)', delay: 3, duration: 11 },
+    { x: '85%', y: '70%', size: 40, color: 'rgba(227,179,65,0.04)', delay: 2, duration: 8 },
+    { x: '25%', y: '80%', size: 35, color: 'rgba(88,166,255,0.03)', delay: 4, duration: 10 },
+  ], []);
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {orbs.map((orb, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            left: orb.x,
+            top: orb.y,
+            width: orb.size,
+            height: orb.size,
+            background: `radial-gradient(circle, ${orb.color}, transparent 70%)`,
+          }}
+          animate={{
+            y: [0, -12, 0, 8, 0],
+            x: [0, 6, 0, -4, 0],
+            scale: [1, 1.1, 1, 0.95, 1],
+          }}
+          transition={{
+            duration: orb.duration,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: orb.delay,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================
+   Shimmer Skeleton Loader — Enhanced with shimmer-slide
    ============================================================ */
 function ShimmerSkeleton() {
   return (
-    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}>
+    <div className="rounded-xl overflow-hidden shimmer-slide" style={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}>
       <div className="h-1.5" style={{ background: 'linear-gradient(90deg, #30363d, #484f58, #30363d)', backgroundSize: '200% 100%' }} />
       <div className="p-4 space-y-3">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+          <div className="w-12 h-12 rounded-xl skeleton-shimmer" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-3/4 rounded shimmer-bg" style={{ backgroundColor: '#21262d' }} />
-            <div className="h-2 w-1/2 rounded shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+            <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+            <div className="h-2 w-1/2 rounded skeleton-shimmer" />
           </div>
         </div>
         <div className="flex gap-2">
-          <div className="h-6 w-16 rounded-full shimmer-bg" style={{ backgroundColor: '#21262d' }} />
-          <div className="h-6 w-16 rounded-full shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+          <div className="h-6 w-16 rounded-full skeleton-shimmer" />
+          <div className="h-6 w-16 rounded-full skeleton-shimmer" />
         </div>
-        <div className="h-8 w-full rounded-lg shimmer-bg" style={{ backgroundColor: '#21262d' }} />
+        <div className="h-8 w-full rounded-lg skeleton-shimmer" />
       </div>
-      <style jsx>{`
-        .shimmer-bg {
-          position: relative;
-          overflow: hidden;
-        }
-        .shimmer-bg::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
-          animation: shimmer-sweep 1.5s infinite;
-        }
-        @keyframes shimmer-sweep {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
+    </div>
+  );
+}
+
+/* ============================================================
+   Activity Timeline Skeleton Loader
+   ============================================================ */
+function ActivitySkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-start gap-3 px-2 py-1.5">
+          <div className="w-8 h-8 rounded-full skeleton-shimmer shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+            <div className="h-2 w-1/3 rounded skeleton-shimmer" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -686,27 +755,18 @@ export function DashboardView() {
           {/* Dot grid background pattern */}
           <DotGridPattern />
 
-          {/* Animated gradient orbs */}
+          {/* Animated floating orbs — background particles */}
+          <FloatingOrbs />
+
+          {/* Gradient mesh behind main content */}
           <div
-            className="absolute top-0 right-0 w-80 h-80 rounded-full pointer-events-none"
+            className="absolute inset-0 pointer-events-none"
             style={{
-              background: 'radial-gradient(circle, rgba(88,166,255,0.08) 0%, transparent 70%)',
-              animation: 'orb-float-1 8s ease-in-out infinite',
-            }}
-          />
-          <div
-            className="absolute bottom-0 left-0 w-64 h-64 rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle, rgba(63,185,80,0.06) 0%, transparent 70%)',
-              animation: 'orb-float-2 10s ease-in-out infinite',
-            }}
-          />
-          <div
-            className="absolute top-1/2 left-1/2 w-48 h-48 rounded-full pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle, rgba(163,113,247,0.04) 0%, transparent 70%)',
-              animation: 'orb-float-3 12s ease-in-out infinite',
-              transform: 'translate(-50%, -50%)',
+              background: [
+                'radial-gradient(ellipse 600px 400px at 20% 10%, rgba(88,166,255,0.05), transparent)',
+                'radial-gradient(ellipse 500px 350px at 80% 80%, rgba(63,185,80,0.04), transparent)',
+                'radial-gradient(ellipse 400px 300px at 50% 50%, rgba(227,179,65,0.03), transparent)',
+              ].join(', '),
             }}
           />
 
@@ -715,17 +775,29 @@ export function DashboardView() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
-                  <span
+                  <motion.span
                     style={{
-                      background: 'linear-gradient(135deg, #58a6ff, #3fb950)',
+                      background: 'linear-gradient(135deg, #58a6ff, #3fb950, #e3b341)',
+                      backgroundSize: '200% auto',
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent',
                       backgroundClip: 'text',
+                      animation: 'gradient-shift 3s ease-in-out infinite',
                     }}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
                   >
                     {getGreeting()}
-                  </span>
-                  <span className="text-3xl">{getGreetingEmoji()}</span>
+                  </motion.span>
+                  {/* Animated emoji with gentle float */}
+                  <motion.span
+                    className="text-3xl inline-block"
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    {getGreetingEmoji()}
+                  </motion.span>
                 </h1>
                 <p className="text-sm mt-2 leading-relaxed" style={{ color: '#8b949e' }}>
                   Build, deploy, and host — all in one place
@@ -735,8 +807,12 @@ export function DashboardView() {
               {/* CTA Buttons */}
               <div className="flex items-center gap-3">
                 <Button
-                  className="gap-2 rounded-lg font-medium"
-                  style={{ backgroundColor: '#238636', color: 'white' }}
+                  className="gap-2 rounded-lg font-medium sparkle-effect relative"
+                  style={{
+                    backgroundColor: '#238636',
+                    color: 'white',
+                    boxShadow: '0 0 15px rgba(35, 134, 54, 0.3), 0 0 30px rgba(35, 134, 54, 0.1)',
+                  }}
                   onClick={() => setCurrentView('builder')}
                 >
                   <Plus className="w-4 h-4" /> New Project

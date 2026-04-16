@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   keywords: ["GitDeploy", "AI", "GitHub", "Deployment", "SaaS", "Project Builder"],
   authors: [{ name: "GitDeploy AI" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/favicon.svg",
   },
 };
 

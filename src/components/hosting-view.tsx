@@ -517,7 +517,7 @@ export function HostingView() {
                           <div className="flex items-center gap-1">
                             {/* Deployment count badge */}
                             <Badge variant="outline" className="text-[9px] px-1.5 py-0" style={{ borderColor: '#21262d', color: '#484f58' }}>
-                              {Math.floor(Math.random() * 50 + 10)}k deploys
+                              {[25, 35, 50, 15, 40, 30, 20, 45][idx % 8]}k deploys
                             </Badge>
                             {platform.autoDeploy ? (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ borderColor: '#238636', color: '#3fb950' }}>

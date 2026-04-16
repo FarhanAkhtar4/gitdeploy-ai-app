@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useAppStore, type ChatMessage } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DiffViewer } from '@/components/diff-viewer';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
 import {
   Send,
   Bot,
@@ -43,6 +49,7 @@ import {
   Lightbulb,
   RotateCcw,
   Mic,
+  Download,
   Share2,
   Star,
   Search,
@@ -53,17 +60,18 @@ import {
   Monitor,
   Database,
   ArrowRight,
+  Square,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /* ─── Popular Questions FAQ ─── */
 const POPULAR_QUESTIONS = [
-  { q: 'How do I deploy a Next.js app to Vercel?', a: 'Connect your GitHub repo, configure build settings, and deploy with zero-config. Vercel auto-detects Next.js and sets up preview deployments for every PR.' },
-  { q: 'What\'s the best CI/CD pipeline for a monorepo?', a: 'Use GitHub Actions with path-based triggers. Configure separate workflows for each package, share caching across jobs, and use matrix builds for parallel testing.' },
-  { q: 'How do I set up Docker for my Node.js app?', a: 'Start with a multi-stage Dockerfile: use node:20-alpine as builder, copy package.json first for caching, then copy source. Expose your port and add health checks.' },
-  { q: 'How to configure custom domains with SSL?', a: 'Most platforms (Vercel, Netlify) auto-provision SSL via Let\'s Encrypt. Add your domain in DNS settings, create a CNAME record pointing to the platform, and SSL is handled automatically.' },
-  { q: 'What are GitHub Actions best practices?', a: 'Cache dependencies, use matrix builds for parallelism, pin action versions with SHA, use secrets for credentials, and set timeout-minutes to prevent runaway workflows.' },
-  { q: 'How do I implement blue-green deployments?', a: 'Maintain two identical environments. Route traffic to the "blue" (live) environment. Deploy to "green", test it, then switch the router. Rollback by switching back to blue.' },
+  { q: 'How do I deploy a Next.js app to Vercel?', a: 'Connect your GitHub repo, configure build settings, and deploy with zero-config. Vercel auto-detects Next.js and sets up preview deployments for every PR.', code: 'npx vercel --prod' },
+  { q: 'What\'s the best CI/CD pipeline for a monorepo?', a: 'Use GitHub Actions with path-based triggers. Configure separate workflows for each package, share caching across jobs, and use matrix builds for parallel testing.', code: 'on:\n  push:\n    paths: \'packages/auth/**\'' },
+  { q: 'How do I set up Docker for my Node.js app?', a: 'Start with a multi-stage Dockerfile: use node:20-alpine as builder, copy package.json first for caching, then copy source. Expose your port and add health checks.', code: 'FROM node:20-alpine AS builder\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build' },
+  { q: 'How to configure custom domains with SSL?', a: 'Most platforms (Vercel, Netlify) auto-provision SSL via Let\'s Encrypt. Add your domain in DNS settings, create a CNAME record pointing to the platform, and SSL is handled automatically.', code: null },
+  { q: 'What are GitHub Actions best practices?', a: 'Cache dependencies, use matrix builds for parallelism, pin action versions with SHA, use secrets for credentials, and set timeout-minutes to prevent runaway workflows.', code: '- uses: actions/checkout@v3  # Pin to SHA for security\n- uses: actions/cache@v3' },
+  { q: 'How do I implement blue-green deployments?', a: 'Maintain two identical environments. Route traffic to the "blue" (live) environment. Deploy to "green", test it, then switch the router. Rollback by switching back to blue.', code: 'kubectl label service/app color=green' },
 ];
 
 /* ─── Recent Activity Timeline ─── */
@@ -115,6 +123,24 @@ const CONTEXT_CHIPS = {
     { icon: Shield, label: 'Security scan', color: '#79c0ff', tooltip: 'Security vulnerability scan' },
     { icon: Zap, label: 'Cache deps', color: '#e3b341', tooltip: 'Optimize dependency caching' },
   ],
+  docker: [
+    { icon: Container, label: 'Dockerfile help', color: '#58a6ff', tooltip: 'Generate Dockerfile' },
+    { icon: Globe, label: 'Docker Compose', color: '#3fb950', tooltip: 'Multi-container setup' },
+    { icon: Shield, label: 'Image security', color: '#f85149', tooltip: 'Scan for vulnerabilities' },
+    { icon: Zap, label: 'Optimize image', color: '#e3b341', tooltip: 'Reduce image size' },
+  ],
+  kubernetes: [
+    { icon: Server, label: 'K8s deploy', color: '#58a6ff', tooltip: 'Kubernetes deployment' },
+    { icon: Database, label: 'Helm charts', color: '#a371f7', tooltip: 'Package management' },
+    { icon: Monitor, label: 'Monitoring', color: '#3fb950', tooltip: 'Set up monitoring' },
+    { icon: Shield, label: 'K8s security', color: '#f85149', tooltip: 'Pod security policies' },
+  ],
+  monitoring: [
+    { icon: Activity, label: 'Set up alerts', color: '#f85149', tooltip: 'Configure alerting' },
+    { icon: Monitor, label: 'Dashboards', color: '#58a6ff', tooltip: 'Build monitoring dashboards' },
+    { icon: Hash, label: 'Log aggregation', color: '#3fb950', tooltip: 'Centralized logging' },
+    { icon: Zap, label: 'APM setup', color: '#e3b341', tooltip: 'Application performance' },
+  ],
 };
 
 /* ─── Right Sidebar Data ─── */
@@ -148,7 +174,7 @@ const QUICK_REFERENCES = [
 ];
 
 /* ─── Quick Reference Item (separate component for hook rules) ─── */
-function QuickReferenceItem({ ref: refItem }: { ref: { title: string; code: string; lang: string } }) {
+function QuickReferenceItem({ item }: { item: { title: string; code: string; lang: string } }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div>
@@ -157,7 +183,7 @@ function QuickReferenceItem({ ref: refItem }: { ref: { title: string; code: stri
         style={{ color: '#8b949e' }}
         onClick={() => setExpanded(!expanded)}
       >
-        <span>{refItem.title}</span>
+        <span>{item.title}</span>
         <ChevronDown
           className="w-3 h-3 transition-transform"
           style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
@@ -171,7 +197,7 @@ function QuickReferenceItem({ ref: refItem }: { ref: { title: string; code: stri
           style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
         >
           <pre className="p-2 text-[9px] font-mono overflow-x-auto custom-scroll" style={{ color: '#c9d1d9' }}>
-            {refItem.code}
+            {item.code}
           </pre>
         </motion.div>
       )}
@@ -536,18 +562,56 @@ export function ChatView() {
   const { chatMessages, addChatMessage, clearChatMessages } = useAppStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const [showDiff, setShowDiff] = useState(false);
   const [diffContent, setDiffContent] = useState('');
   const [charCount, setCharCount] = useState(0);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [contextType, setContextType] = useState<'default' | 'deployment' | 'cicd'>('default');
+  const [contextType, setContextType] = useState<'default' | 'deployment' | 'cicd' | 'docker' | 'kubernetes' | 'monitoring'>('default');
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
   const [topicSearch, setTopicSearch] = useState('');
   const [aiMode, setAIMode] = useState<AIMode>('balanced');
   const [showAIModeMenu, setShowAIModeMenu] = useState(false);
-  const [showVoiceIndicator, setShowVoiceIndicator] = useState(false);
+  const [sessionStartTime] = useState(Date.now());
+  const [sessionElapsed, setSessionElapsed] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const aiModeRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const { toast } = useToast();
+
+  // Session timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSessionElapsed(Math.floor((Date.now() - sessionStartTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
+  const formatSessionTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Export chat as markdown
+  const exportChat = useCallback(() => {
+    const md = chatMessages.map(m => {
+      const role = m.role === 'user' ? '**You**' : '**AI Assistant**';
+      const time = new Date(m.timestamp).toLocaleString();
+      return `${role} _(${time})_\n\n${m.content}`;
+    }).join('\n\n---\n\n');
+    const header = `# GitDeploy AI - Chat Export\n_Exported on ${new Date().toLocaleString()}_\n\n---\n\n`;
+    const blob = new Blob([header + md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-export-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [chatMessages]);
 
   // Session stats
   const sessionStats = useMemo(() => {
@@ -575,7 +639,13 @@ export function ChatView() {
   useEffect(() => {
     if (chatMessages.length > 0) {
       const lastMsg = chatMessages[chatMessages.length - 1].content.toLowerCase();
-      if (lastMsg.includes('deploy') || lastMsg.includes('vercel') || lastMsg.includes('docker') || lastMsg.includes('hosting')) {
+      if (lastMsg.includes('kubernetes') || lastMsg.includes('k8s') || lastMsg.includes('helm') || lastMsg.includes('pod')) {
+        setContextType('kubernetes');
+      } else if (lastMsg.includes('monitoring') || lastMsg.includes('grafana') || lastMsg.includes('prometheus') || lastMsg.includes('alert')) {
+        setContextType('monitoring');
+      } else if (lastMsg.includes('docker') || lastMsg.includes('container') || lastMsg.includes('dockerfile') || lastMsg.includes('compose')) {
+        setContextType('docker');
+      } else if (lastMsg.includes('deploy') || lastMsg.includes('vercel') || lastMsg.includes('hosting')) {
         setContextType('deployment');
       } else if (lastMsg.includes('ci/cd') || lastMsg.includes('pipeline') || lastMsg.includes('workflow') || lastMsg.includes('github actions')) {
         setContextType('cicd');
@@ -585,9 +655,28 @@ export function ChatView() {
     }
   }, [chatMessages]);
 
+  const stopStreaming = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // Save whatever we've streamed so far as a message
+    if (streamingContent) {
+      addChatMessage({
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: streamingContent + '\n\n_⏹ Stopped generating_',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    setStreamingContent('');
+    setIsStreaming(false);
+    setIsLoading(false);
+  };
+
   const sendMessage = async (message?: string) => {
     const content = message || input;
-    if (!content.trim() || isLoading) return;
+    if (!content.trim() || isLoading || isStreaming) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -599,6 +688,8 @@ export function ChatView() {
     setInput('');
     setCharCount(0);
     setIsLoading(true);
+    setStreamingContent('');
+    setIsStreaming(false);
 
     try {
       const messages = [...chatMessages, userMsg].map((m) => ({
@@ -606,35 +697,107 @@ export function ChatView() {
         content: m.content,
       }));
 
+      // Create AbortController for cancellation
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, mode: 'chat-assistant' }),
+        body: JSON.stringify({ messages, mode: 'chat-assistant', stream: true }),
+        signal: abortController.signal,
       });
 
-      const data = await res.json();
-      const aiContent = data.response || 'Sorry, I could not generate a response.';
+      if (!res.ok) {
+        throw new Error(`HTTP error: ${res.status}`);
+      }
 
-      addChatMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: aiContent,
-        timestamp: new Date().toISOString(),
-      });
+      // Check if the response is a stream (SSE)
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream')) {
+        setIsStreaming(true);
+        setIsLoading(false);
 
-      if (aiContent.includes('---') && aiContent.includes('+++') && aiContent.includes('@@')) {
-        setDiffContent(aiContent);
-        setShowDiff(true);
+        let fullContent = '';
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) throw new Error('No reader available');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value, { stream: true });
+          const lines = text.split('\n');
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === '') continue;
+
+            if (trimmed.startsWith('data: ')) {
+              const data = trimmed.slice(6);
+              if (data === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.content) {
+                  fullContent += parsed.content;
+                  setStreamingContent(fullContent);
+                }
+              } catch {
+                // Skip unparseable chunks
+              }
+            }
+          }
+        }
+
+        // Streaming complete — add final message
+        const aiContent = fullContent || 'Sorry, I could not generate a response.';
+        addChatMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiContent,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (aiContent.includes('---') && aiContent.includes('+++') && aiContent.includes('@@')) {
+          setDiffContent(aiContent);
+          setShowDiff(true);
+        }
+      } else {
+        // Fallback: non-streaming JSON response
+        const data = await res.json();
+        const aiContent = data.response || 'Sorry, I could not generate a response.';
+
+        addChatMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: aiContent,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (aiContent.includes('---') && aiContent.includes('+++') && aiContent.includes('@@')) {
+          setDiffContent(aiContent);
+          setShowDiff(true);
+        }
       }
     } catch (error) {
-      addChatMessage({
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '⚠️ Error: Could not reach AI service. Please try again.',
-        timestamp: new Date().toISOString(),
-      });
+      if (error instanceof Error && error.name === 'AbortError') {
+        // User cancelled — already handled in stopStreaming
+      } else {
+        addChatMessage({
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: '⚠️ Error: Could not reach AI service. Please try again.',
+          timestamp: new Date().toISOString(),
+        });
+      }
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
+      setStreamingContent('');
+      abortControllerRef.current = null;
     }
   };
 
@@ -643,7 +806,7 @@ export function ChatView() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const currentChips = CONTEXT_CHIPS[contextType];
+  const currentChips = CONTEXT_CHIPS[contextType] || CONTEXT_CHIPS.default;
   const currentMode = AI_MODES.find(m => m.value === aiMode)!;
   const filteredTopics = CONVERSATION_TOPICS.filter(t =>
     t.label.toLowerCase().includes(topicSearch.toLowerCase())
@@ -822,7 +985,7 @@ export function ChatView() {
                   border: `1px solid ${contextType === 'deployment' ? '#3fb95030' : '#a371f730'}`,
                 }}
               >
-                {contextType === 'deployment' ? '🚀 Deployment' : '⚙️ CI/CD'} context
+                {contextType === 'deployment' ? '🚀 Deployment' : contextType === 'cicd' ? '⚙️ CI/CD' : contextType === 'docker' ? '🐳 Docker' : contextType === 'kubernetes' ? '☸️ K8s' : '📊 Monitoring'} context
               </motion.div>
             )}
             <Button
@@ -1168,7 +1331,8 @@ export function ChatView() {
               ))}
             </AnimatePresence>
 
-            {isLoading && (
+            {/* Loading indicator (before streaming starts) */}
+            {isLoading && !isStreaming && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1188,6 +1352,58 @@ export function ChatView() {
                   <TypingIndicator />
                   <span className="text-xs ml-1" style={{ color: '#8b949e' }}>Thinking</span>
                 </div>
+              </motion.div>
+            )}
+
+            {/* Streaming message with typewriter cursor */}
+            {isStreaming && streamingContent && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-3"
+              >
+                <div className="relative shrink-0">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020)' }}>
+                    <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
+                  </div>
+                </div>
+                <div className="rounded-2xl px-4 py-3 max-w-[85%]" style={{
+                  background: 'linear-gradient(135deg, #161b22 0%, #0d1117 50%, #161b22 100%)',
+                  border: '1px solid #21262d',
+                  borderLeft: '2px solid #58a6ff',
+                }}>
+                  <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed" style={{ color: '#c9d1d9' }}>
+                    {streamingContent}
+                    <motion.span
+                      animate={{ opacity: [1, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut' }}
+                      className="inline-block w-2 h-4 ml-0.5 align-middle"
+                      style={{ backgroundColor: '#58a6ff', borderRadius: '1px' }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Stop generating button */}
+            {isStreaming && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex justify-center"
+              >
+                <button
+                  onClick={stopStreaming}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 hover:scale-105"
+                  style={{
+                    backgroundColor: '#f8514915',
+                    color: '#f85149',
+                    border: '1px solid #f8514930',
+                  }}
+                >
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  Stop generating
+                </button>
               </motion.div>
             )}
 
@@ -1248,16 +1464,28 @@ export function ChatView() {
 
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                {/* Attach file button */}
+                {/* Paste code button */}
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
-                  <button
-                    className="p-1 rounded-md transition-colors hover:bg-[#30363d]"
-                    style={{ color: '#484f58' }}
-                    title="Attach file (coming soon)"
-                    onClick={() => {}}
-                  >
-                    <Paperclip className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="p-1 rounded-md transition-colors hover:bg-[#30363d]"
+                        style={{ color: '#484f58' }}
+                        aria-label="Insert code block"
+                        onClick={() => {
+                          const codeWrap = '\n```\n\n```\n';
+                          const newInput = input + (input ? '\n' : '') + codeWrap;
+                          setInput(newInput);
+                          setCharCount(newInput.length);
+                        }}
+                      >
+                        <Code className="w-3.5 h-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px] bg-[#1c2128] text-[#c9d1d9] border-[#30363d] px-2 py-1">
+                      Insert code block
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <Textarea
                   value={input}
@@ -1287,25 +1515,32 @@ export function ChatView() {
                 )}
               </div>
 
-              {/* Voice input button */}
+              {/* Export chat button */}
               <Button
                 variant="outline"
                 size="icon"
                 className="rounded-xl shrink-0 h-[44px] w-[44px] transition-all duration-300"
-                style={{ borderColor: '#30363d', color: showVoiceIndicator ? '#f85149' : '#484f58' }}
-                title="Voice input (coming soon)"
+                style={{ borderColor: '#30363d', color: '#484f58' }}
+                title="Export chat as markdown"
                 onClick={() => {
-                  setShowVoiceIndicator(!showVoiceIndicator);
-                  setTimeout(() => setShowVoiceIndicator(false), 2000);
+                  const md = chatMessages.map(m => `**${m.role === 'user' ? 'You' : 'AI'}:** ${m.content}`).join('\n\n---\n\n');
+                  const blob = new Blob([md], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'chat-export.md';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast({ title: 'Chat exported', description: 'Downloaded as chat-export.md' });
                 }}
               >
-                <Mic className="w-4 h-4" />
+                <Share2 className="w-4 h-4" />
               </Button>
 
               {/* Send button */}
               <Button
                 size="icon"
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || isStreaming}
                 className="rounded-xl shrink-0 transition-all duration-300 h-[44px] w-[44px]"
                 style={{
                   background: input.trim()
@@ -1456,16 +1691,8 @@ export function ChatView() {
             </h3>
             <div className="space-y-1.5">
               {QUICK_REFERENCES.map((ref, i) => (
-                <QuickReferenceItem key={i} ref={ref} />
+                <QuickReferenceItem key={i} item={ref} />
               ))}
-                        <div className="flex justify-end px-2 pb-1.5">
-                          <CopyButton text={ref.code} />
-                        </div>
-                      </motion.div>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           </div>
 

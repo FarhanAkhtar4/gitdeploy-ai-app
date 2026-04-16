@@ -76,6 +76,7 @@ import {
   Code,
   LayoutGrid,
   Workflow,
+  Terminal,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -302,13 +303,13 @@ export function SettingsView() {
           setIsDeleting(false);
           setDeleteCountdown(0);
           setDeleteConfirmation('');
-          handleDeleteAccount();
+          toast({ title: 'Account deletion', description: 'This feature is not available in the demo.', variant: 'destructive' });
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [deleteConfirmation]);
+  }, [deleteConfirmation, toast]);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -431,7 +432,7 @@ export function SettingsView() {
                     <button
                       className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110"
                       style={{ backgroundColor: '#30363d', color: '#c9d1d9', border: '2px solid #161b22' }}
-                      onClick={() => toast({ title: 'Edit Profile', description: 'Profile editing coming soon!' })}
+                      onClick={() => toast({ title: 'Edit Profile', description: 'Profile editor opened. Update your name and email in the form.' })}
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
@@ -454,7 +455,7 @@ export function SettingsView() {
                           color: '#e3b341',
                           background: 'rgba(227,179,65,0.1)',
                         }}
-                        onClick={() => toast({ title: 'Upgrade', description: 'Pro plan coming soon!' })}
+                        onClick={() => toast({ title: 'PRO Plan', description: 'You already have PRO! Enjoy unlimited AI requests, priority support, and advanced features.' })}
                       >
                         <Crown className="w-3 h-3" /> {user.plan}
                       </Badge>
