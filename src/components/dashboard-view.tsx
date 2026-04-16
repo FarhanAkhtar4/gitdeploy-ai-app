@@ -5,6 +5,7 @@ import { useAppStore, type Project, type ProjectStatus } from '@/store/app-store
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -29,7 +30,6 @@ import {
   Rocket,
   Pencil,
   Trash2,
-  ExternalLink,
   RefreshCw,
   FolderOpen,
   Zap,
@@ -42,12 +42,23 @@ import {
   AlertCircle,
   Sparkles,
   Timer,
+  MessageSquare,
+  Globe,
+  Hammer,
+  ChevronRight,
+  Lightbulb,
+  Shield,
+  FileCode,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { ProjectHealth } from '@/components/project-health';
 import { DeploymentHistory } from '@/components/deployment-history';
+import { ApiUsageTracker } from '@/components/api-usage-tracker';
 
+/* ============================================================
+   Animation Variants
+   ============================================================ */
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
@@ -57,6 +68,22 @@ const cardVariants = {
   }),
 };
 
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.06 },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
+};
+
+/* ============================================================
+   Helper: Time-of-day greeting
+   ============================================================ */
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good morning';
@@ -64,34 +91,71 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+function getGreetingEmoji(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return '\u2600\uFE0F';
+  if (hour < 18) return '\uD83C\uDF05';
+  return '\uD83C\uDF19';
+}
+
+/* ============================================================
+   Mini Sparkline Component
+   ============================================================ */
 function MiniSparkline({ color, values }: { color: string; values: number[] }) {
   const max = Math.max(...values, 1);
   return (
-    <div className="flex items-end gap-[2px] h-6">
+    <div className="flex items-end gap-[2px] h-8">
       {values.map((v, i) => (
-        <div
+        <motion.div
           key={i}
-          className="w-1 rounded-full transition-all duration-300"
+          className="w-1.5 rounded-full"
           style={{
             height: `${(v / max) * 100}%`,
-            minHeight: '2px',
+            minHeight: '3px',
             backgroundColor: color,
-            opacity: 0.5 + (i / values.length) * 0.5,
+            opacity: 0.35 + (i / values.length) * 0.65,
           }}
+          initial={{ height: 0 }}
+          animate={{ height: `${(v / max) * 100}%` }}
+          transition={{ delay: 0.3 + i * 0.04, duration: 0.4, ease: 'easeOut' }}
         />
       ))}
     </div>
   );
 }
 
-// Sample activity data
+/* ============================================================
+   Animated Counter Component
+   ============================================================ */
+function AnimatedNumber({ value, color }: { value: number; color: string }) {
+  return (
+    <motion.span
+      className="text-3xl font-bold tabular-nums"
+      style={{
+        background: `linear-gradient(135deg, ${color}, ${color}bb)`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+      }}
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+    >
+      {value}
+    </motion.span>
+  );
+}
+
+/* ============================================================
+   Sample Activity Data
+   ============================================================ */
 const SAMPLE_ACTIVITIES = [
-  { id: '1', type: 'project_created' as const, message: 'Project "Invoice Manager" created', time: '2 minutes ago', color: '#58a6ff' },
-  { id: '2', type: 'deploy_started' as const, message: 'Deployment started for "Task Manager"', time: '15 minutes ago', color: '#e3b341' },
-  { id: '3', type: 'deploy_completed' as const, message: 'Deployment completed for "Chat App"', time: '1 hour ago', color: '#3fb950' },
-  { id: '4', type: 'file_pushed' as const, message: '12 files pushed to "Analytics Dashboard"', time: '2 hours ago', color: '#58a6ff' },
-  { id: '5', type: 'deploy_failed' as const, message: 'Deployment failed for "Blog CMS"', time: '3 hours ago', color: '#f85149' },
-  { id: '6', type: 'project_created' as const, message: 'Project "Food Delivery API" created', time: '5 hours ago', color: '#58a6ff' },
+  { id: '1', type: 'project_created' as const, message: 'Project "Invoice Manager" created', time: '2m ago', color: '#58a6ff', view: 'builder' as const },
+  { id: '2', type: 'deploy_started' as const, message: 'Deployment started for "Task Manager"', time: '15m ago', color: '#e3b341', view: 'deploy' as const },
+  { id: '3', type: 'deploy_completed' as const, message: 'Deployment completed for "Chat App"', time: '1h ago', color: '#3fb950', view: 'deploy' as const },
+  { id: '4', type: 'file_pushed' as const, message: '12 files pushed to "Analytics Dashboard"', time: '2h ago', color: '#58a6ff', view: 'builder' as const },
+  { id: '5', type: 'deploy_failed' as const, message: 'Deployment failed for "Blog CMS"', time: '3h ago', color: '#f85149', view: 'deploy' as const },
+  { id: '6', type: 'project_created' as const, message: 'Project "Food Delivery API" created', time: '5h ago', color: '#58a6ff', view: 'builder' as const },
 ];
 
 function ActivityIcon({ type, color }: { type: string; color: string }) {
@@ -111,11 +175,186 @@ function ActivityIcon({ type, color }: { type: string; color: string }) {
   }
 }
 
+/* ============================================================
+   Quick Actions Config
+   ============================================================ */
+const QUICK_ACTIONS = [
+  {
+    id: 'build',
+    title: 'Build New Project',
+    description: 'Describe your idea and let AI generate the codebase',
+    icon: Hammer,
+    color: '#58a6ff',
+    view: 'builder' as const,
+  },
+  {
+    id: 'deploy',
+    title: 'View Deployments',
+    description: 'Deploy to GitHub with real-time status tracking',
+    icon: Rocket,
+    color: '#3fb950',
+    view: 'deploy' as const,
+  },
+  {
+    id: 'hosting',
+    title: 'Free Hosting',
+    description: 'Find the best free hosting for your project',
+    icon: Globe,
+    color: '#e3b341',
+    view: 'hosting' as const,
+  },
+  {
+    id: 'chat',
+    title: 'Ask AI',
+    description: 'Get deployment help and workflow suggestions',
+    icon: MessageSquare,
+    color: '#a371f7',
+    view: 'chat' as const,
+  },
+];
+
+/* ============================================================
+   Circular Progress for Health (enhanced version)
+   ============================================================ */
+function CircularProgress({ value, size = 100, strokeWidth = 8 }: { value: number; size?: number; strokeWidth?: number }) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (value / 100) * circumference;
+
+  const getColor = (v: number) => {
+    if (v >= 80) return '#3fb950';
+    if (v >= 50) return '#e3b341';
+    return '#f85149';
+  };
+
+  const color = getColor(value);
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#21262d"
+          strokeWidth={strokeWidth}
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeLinecap="round"
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.2, ease: 'easeInOut', delay: 0.3 }}
+          style={{
+            filter: `drop-shadow(0 0 6px ${color}60)`,
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <motion.span
+          className="text-2xl font-bold"
+          style={{ color }}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.8, duration: 0.4, type: 'spring' }}
+        >
+          {value}
+        </motion.span>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Health Factor Bar
+   ============================================================ */
+function HealthFactorBar({
+  label,
+  value,
+  percent,
+  status,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  percent: number;
+  status: 'good' | 'warning' | 'bad';
+  icon: React.ElementType;
+}) {
+  const colors = {
+    good: '#3fb950',
+    warning: '#e3b341',
+    bad: '#f85149',
+  };
+  const color = colors[status];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5" style={{ color }} />
+          <span className="text-xs font-medium" style={{ color: '#c9d1d9' }}>{label}</span>
+        </div>
+        <span className="text-xs" style={{ color: '#8b949e' }}>{value}</span>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#21262d' }}>
+        <motion.div
+          className="h-full rounded-full"
+          style={{ backgroundColor: color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut', delay: 0.5 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Improvement Suggestion
+   ============================================================ */
+function ImprovementSuggestion({
+  text,
+  actionLabel,
+  color,
+  onClick,
+}: {
+  text: string;
+  actionLabel: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 p-2.5 rounded-lg cursor-pointer transition-colors"
+      style={{ backgroundColor: '#0d1117' }}
+      onClick={onClick}
+    >
+      <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+      <p className="text-xs flex-1" style={{ color: '#8b949e' }}>{text}</p>
+      <span className="text-[10px] font-medium shrink-0 flex items-center gap-0.5" style={{ color }}>
+        {actionLabel} <ChevronRight className="w-2.5 h-2.5" />
+      </span>
+    </div>
+  );
+}
+
+/* ============================================================
+   Dashboard View (Main Component)
+   ============================================================ */
 export function DashboardView() {
   const { projects, setProjects, user, setCurrentView, setSelectedProject, setIsLoading, isGithubConnected } = useAppStore();
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  /* ----- Fetch Projects ----- */
   const fetchProjects = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -174,6 +413,7 @@ export function DashboardView() {
     fetchProjects();
   }, [fetchProjects]);
 
+  /* ----- Handlers ----- */
   const handleRebuild = async (projectId: string) => {
     if (!user) return;
     try {
@@ -211,6 +451,7 @@ export function DashboardView() {
     }
   };
 
+  /* ----- Computed Values ----- */
   const FRAMEWORK_BADGES: Record<string, { label: string; color: string }> = {
     nextjs: { label: 'Next.js', color: '#58a6ff' },
     react: { label: 'React', color: '#61dafb' },
@@ -223,37 +464,148 @@ export function DashboardView() {
   const buildingCount = projects.filter((p) => ['building', 'deploying'].includes(p.status)).length;
   const failedCount = projects.filter((p) => p.status === 'failed').length;
 
+  /* ----- Stats Config ----- */
   const stats = [
-    { label: 'Total Projects', value: projects.length, icon: FolderOpen, color: '#58a6ff', bg: '#58a6ff', sparkline: [2, 4, 3, 5, 4, projects.length] },
-    { label: 'Live', value: liveCount, icon: Zap, color: '#3fb950', bg: '#3fb950', sparkline: [0, 1, 1, 2, 1, liveCount] },
-    { label: 'Building', value: buildingCount, icon: Activity, color: '#e3b341', bg: '#e3b341', sparkline: [0, 0, 1, 0, 1, buildingCount] },
-    { label: 'Failed', value: failedCount, icon: Rocket, color: '#f85149', bg: '#f85149', sparkline: [0, 0, 0, 1, 0, failedCount] },
+    { label: 'Total Projects', value: projects.length, icon: FolderOpen, color: '#58a6ff', sparkline: [2, 4, 3, 5, 4, projects.length] },
+    { label: 'Live', value: liveCount, icon: Zap, color: '#3fb950', sparkline: [0, 1, 1, 2, 1, liveCount] },
+    { label: 'Building', value: buildingCount, icon: Activity, color: '#e3b341', sparkline: [0, 0, 1, 0, 1, buildingCount] },
+    { label: 'Failed', value: failedCount, icon: Rocket, color: '#f85149', sparkline: [0, 0, 0, 1, 0, failedCount] },
   ];
 
+  /* ----- Health Score ----- */
+  let healthScore = 50;
+  if (isGithubConnected) healthScore += 15;
+  if (projects.length > 0) healthScore += 10;
+  if (liveCount > 0) healthScore += 15;
+  if (failedCount === 0 && projects.length > 0) healthScore += 10;
+  if (projects.length === 0 && !isGithubConnected) healthScore = 25;
+  healthScore = Math.min(100, healthScore);
+
+  const getHealthLabel = (score: number) => {
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Needs Setup';
+    return 'Getting Started';
+  };
+
+  const getHealthColor = (score: number) => {
+    if (score >= 80) return '#3fb950';
+    if (score >= 50) return '#e3b341';
+    return '#f85149';
+  };
+
+  /* ----- Footer Stats ----- */
+  const totalDeployments = projects.reduce((acc, p) => acc + (p.deployments?.length || 0), 0);
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
   return (
     <div className="space-y-6">
-      {/* Header */}
+
+      {/* ================================================
+          1. HERO SECTION
+          ================================================ */}
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="flex items-center justify-between"
+        transition={{ duration: 0.5, ease: 'easeOut' }}
       >
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#c9d1d9' }}>
-            {getGreeting()} 👋
-          </h1>
-          <p className="text-sm mt-1" style={{ color: '#8b949e' }}>
-            Manage your projects and deployments
-          </p>
-        </div>
-        <Button
-          className="gap-2"
-          style={{ backgroundColor: '#238636', color: 'white' }}
-          onClick={() => setCurrentView('builder')}
+        <div
+          className="rounded-2xl p-6 relative overflow-hidden"
+          style={{
+            background: 'linear-gradient(135deg, #161b22 0%, #0d1117 100%)',
+            border: '1px solid #30363d',
+          }}
         >
-          <Plus className="w-4 h-4" /> New Project
-        </Button>
+          {/* Decorative gradient orbs */}
+          <div
+            className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle, rgba(88,166,255,0.06) 0%, transparent 70%)',
+              transform: 'translate(30%, -40%)',
+            }}
+          />
+          <div
+            className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none"
+            style={{
+              background: 'radial-gradient(circle, rgba(63,185,80,0.04) 0%, transparent 70%)',
+              transform: 'translate(-20%, 30%)',
+            }}
+          />
+
+          <div className="relative z-10">
+            {/* Greeting + Tagline */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                  <span
+                    style={{
+                      background: 'linear-gradient(135deg, #58a6ff, #3fb950)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      backgroundClip: 'text',
+                    }}
+                  >
+                    {getGreeting()}
+                  </span>
+                  <span>{getGreetingEmoji()}</span>
+                </h1>
+                <p className="text-sm mt-1.5" style={{ color: '#8b949e' }}>
+                  Build, deploy, and host — all in one place
+                </p>
+              </div>
+
+              {/* CTA Buttons */}
+              <div className="flex items-center gap-3">
+                <Button
+                  className="gap-2 rounded-lg font-medium"
+                  style={{ backgroundColor: '#238636', color: 'white' }}
+                  onClick={() => setCurrentView('builder')}
+                >
+                  <Plus className="w-4 h-4" /> New Project
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2 rounded-lg font-medium"
+                  style={{ borderColor: '#30363d', color: '#c9d1d9', backgroundColor: '#21262d' }}
+                  onClick={() => setCurrentView('onboarding')}
+                >
+                  <GitBranch className="w-4 h-4" /> Connect GitHub
+                </Button>
+              </div>
+            </div>
+
+            {/* Mini Stats Bar — Glassmorphism */}
+            <motion.div
+              className="mt-5 rounded-xl p-3 flex items-center justify-around flex-wrap gap-2"
+              style={{
+                backgroundColor: 'rgba(22, 27, 34, 0.6)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(48, 54, 61, 0.5)',
+              }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+            >
+              {[
+                { label: 'Total Projects', value: projects.length, color: '#58a6ff' },
+                { label: 'Live', value: liveCount, color: '#3fb950' },
+                { label: 'Building', value: buildingCount, color: '#e3b341' },
+                { label: 'Failed', value: failedCount, color: '#f85149' },
+              ].map((item, i) => (
+                <div key={item.label} className="flex items-center gap-2">
+                  {i > 0 && (
+                    <div className="w-px h-6 mx-2 hidden sm:block" style={{ backgroundColor: '#30363d' }} />
+                  )}
+                  <span className="text-lg font-bold" style={{ color: item.color }}>{item.value}</span>
+                  <span className="text-xs" style={{ color: '#8b949e' }}>{item.label}</span>
+                </div>
+              ))}
+            </motion.div>
+          </div>
+        </div>
       </motion.div>
 
       {/* Setup Guide (shown when GitHub not connected) */}
@@ -261,7 +613,7 @@ export function DashboardView() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
+          transition={{ delay: 0.15, duration: 0.4 }}
         >
           <Card className="border-2" style={{ borderColor: '#58a6ff40', backgroundColor: '#161b22' }}>
             <CardContent className="p-5">
@@ -290,7 +642,9 @@ export function DashboardView() {
         </motion.div>
       )}
 
-      {/* Stats Cards */}
+      {/* ================================================
+          2. GLASSMORPHISM STATS CARDS
+          ================================================ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
           <motion.div
@@ -299,22 +653,36 @@ export function DashboardView() {
             variants={cardVariants}
             initial="hidden"
             animate="visible"
+            whileHover={{ y: -4, boxShadow: `0 8px 30px ${stat.color}20` }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           >
             <Card
-              className="hover:shadow-lg transition-all duration-300 glow-hover-blue group"
-              style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}
+              className="relative overflow-hidden cursor-default"
+              style={{
+                backgroundColor: 'rgba(22, 27, 34, 0.6)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderColor: '#30363d',
+                borderTop: `3px solid ${stat.color}`,
+              }}
             >
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                    <p className="text-xs mt-0.5" style={{ color: '#8b949e' }}>{stat.label}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="p-2.5 rounded-xl transition-transform duration-300 group-hover:scale-110" style={{ backgroundColor: `${stat.bg}15` }}>
-                      <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
-                    </div>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <AnimatedNumber value={stat.value} color={stat.color} />
+                    <p className="text-xs" style={{ color: '#8b949e' }}>{stat.label}</p>
                     <MiniSparkline color={stat.color} values={stat.sparkline} />
+                  </div>
+                  <div
+                    className="p-2.5 rounded-xl relative"
+                    style={{ backgroundColor: `${stat.color}15` }}
+                  >
+                    <stat.icon className="w-5 h-5" style={{ color: stat.color }} />
+                    {/* Pulsing glow behind icon */}
+                    <div
+                      className="absolute inset-0 rounded-xl animate-pulse-glow"
+                      style={{ backgroundColor: `${stat.color}10` }}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -323,7 +691,9 @@ export function DashboardView() {
         ))}
       </div>
 
-      {/* Projects Table */}
+      {/* ================================================
+          PROJECT TABLE
+          ================================================ */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -533,86 +903,119 @@ export function DashboardView() {
         </motion.div>
       )}
 
-      {/* Quick Tips */}
-      {projects.length === 0 && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            {
-              step: '1',
-              title: 'Connect GitHub',
-              desc: 'Link your GitHub account with a Personal Access Token',
-              icon: Rocket,
-              color: '#58a6ff',
-              action: 'onboarding' as AppView,
-            },
-            {
-              step: '2',
-              title: 'Build with AI',
-              desc: 'Describe your project and let AI generate the complete codebase',
-              icon: Zap,
-              color: '#e3b341',
-              action: 'builder' as AppView,
-            },
-            {
-              step: '3',
-              title: 'Deploy & Host Free',
-              desc: 'Push to GitHub and get free hosting recommendations',
-              icon: ExternalLink,
-              color: '#3fb950',
-              action: 'hosting' as AppView,
-            },
-          ].map((tip, i) => (
-            <motion.div
-              key={tip.step}
-              custom={i}
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              <Card
-                className="hover:border-[#58a6ff] transition-all duration-300 cursor-pointer group hover:scale-[1.02] hover:shadow-lg"
-                style={{
-                  backgroundColor: '#161b22',
-                  borderColor: '#30363d',
-                  borderLeft: `3px solid transparent`,
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderLeftColor = tip.color;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderLeftColor = 'transparent';
-                }}
-                onClick={() => setCurrentView(tip.action)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold transition-transform duration-300 group-hover:scale-110"
-                      style={{ backgroundColor: `${tip.color}15`, color: tip.color }}
-                    >
-                      {tip.step}
-                    </div>
-                    <tip.icon className="w-4 h-4" style={{ color: tip.color }} />
-                  </div>
-                  <h4 className="text-sm font-medium" style={{ color: '#c9d1d9' }}>{tip.title}</h4>
-                  <p className="text-xs mt-1" style={{ color: '#8b949e' }}>{tip.desc}</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {/* Project Health & Recent Activity */}
+      {/* ================================================
+          3. ENHANCED RECENT ACTIVITY + PROJECT HEALTH
+          ================================================ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Project Health — Enhanced */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.4 }}
           className="lg:col-span-1"
         >
-          <ProjectHealth />
+          <Card
+            className="overflow-hidden"
+            style={{ backgroundColor: '#161b22', borderColor: '#30363d', borderTop: `3px solid ${getHealthColor(healthScore)}` }}
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2" style={{ color: '#c9d1d9' }}>
+                <Shield className="w-4 h-4" style={{ color: getHealthColor(healthScore) }} />
+                Project Health
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-5">
+                <CircularProgress value={healthScore} />
+                <div className="flex-1">
+                  <p className="text-base font-semibold" style={{ color: '#c9d1d9' }}>
+                    {getHealthLabel(healthScore)}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: '#8b949e' }}>
+                    {isGithubConnected
+                      ? 'Your setup looks good'
+                      : 'Connect GitHub to improve your score'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Health Factor Bars */}
+              <div className="mt-5 space-y-3.5 pt-4 border-t" style={{ borderColor: '#21262d' }}>
+                <HealthFactorBar
+                  label="GitHub Connected"
+                  value={isGithubConnected ? 'Active' : 'Not connected'}
+                  percent={isGithubConnected ? 100 : 0}
+                  status={isGithubConnected ? 'good' : 'bad'}
+                  icon={CheckCircle}
+                />
+                <HealthFactorBar
+                  label="Projects"
+                  value={`${projects.length} total · ${liveCount} live`}
+                  percent={projects.length > 0 ? Math.min(100, (liveCount / Math.max(projects.length, 1)) * 100) : 0}
+                  status={projects.length > 0 ? (liveCount > 0 ? 'good' : 'warning') : 'bad'}
+                  icon={FileCode}
+                />
+                <HealthFactorBar
+                  label="Deployments"
+                  value={failedCount > 0 ? `${failedCount} failed` : liveCount > 0 ? 'All successful' : 'No deployments'}
+                  percent={failedCount > 0 ? Math.max(20, 100 - failedCount * 30) : liveCount > 0 ? 100 : 20}
+                  status={failedCount > 0 ? 'bad' : liveCount > 0 ? 'good' : 'warning'}
+                  icon={Activity}
+                />
+              </div>
+
+              {/* Improvement Suggestions */}
+              <div className="mt-4 space-y-2 pt-3 border-t" style={{ borderColor: '#21262d' }}>
+                <p className="text-[10px] uppercase font-semibold tracking-wider" style={{ color: '#484f58' }}>
+                  Suggestions
+                </p>
+                {!isGithubConnected && (
+                  <ImprovementSuggestion
+                    text="Connect GitHub to unlock deployment features"
+                    actionLabel="Connect"
+                    color="#e3b341"
+                    onClick={() => setCurrentView('onboarding')}
+                  />
+                )}
+                {projects.length === 0 && (
+                  <ImprovementSuggestion
+                    text="Create your first project to get started"
+                    actionLabel="Build"
+                    color="#58a6ff"
+                    onClick={() => setCurrentView('builder')}
+                  />
+                )}
+                {projects.length > 0 && liveCount === 0 && (
+                  <ImprovementSuggestion
+                    text="Deploy a project to go live"
+                    actionLabel="Deploy"
+                    color="#3fb950"
+                    onClick={() => setCurrentView('deploy')}
+                  />
+                )}
+                {failedCount > 0 && (
+                  <ImprovementSuggestion
+                    text="Fix failed deployments to improve health"
+                    actionLabel="View"
+                    color="#f85149"
+                    onClick={() => setCurrentView('deploy')}
+                  />
+                )}
+                {isGithubConnected && projects.length > 0 && liveCount > 0 && failedCount === 0 && (
+                  <ImprovementSuggestion
+                    text="Ask AI for optimization suggestions"
+                    actionLabel="Chat"
+                    color="#a371f7"
+                    onClick={() => setCurrentView('chat')}
+                  />
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
+
+        {/* Recent Activity — Enhanced */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -621,45 +1024,169 @@ export function DashboardView() {
         >
           <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Timer className="w-4 h-4" style={{ color: '#58a6ff' }} />
-                <CardTitle className="text-sm" style={{ color: '#8b949e' }}>Recent Activity</CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Timer className="w-4 h-4" style={{ color: '#58a6ff' }} />
+                  <CardTitle className="text-sm" style={{ color: '#c9d1d9' }}>Recent Activity</CardTitle>
+                </div>
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5" style={{ borderColor: '#30363d', color: '#8b949e' }}>
+                  {SAMPLE_ACTIVITIES.length} events
+                </Badge>
               </div>
             </CardHeader>
-          <CardContent>
-            <div className="space-y-0">
-              {SAMPLE_ACTIVITIES.map((activity, i) => (
-                <motion.div
-                  key={activity.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + i * 0.06, duration: 0.3 }}
-                  className="flex items-start gap-3 relative"
-                >
-                  {/* Timeline line and dot */}
-                  <div className="flex flex-col items-center shrink-0">
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 z-10"
-                      style={{ backgroundColor: `${activity.color}15` }}
-                    >
-                      <ActivityIcon type={activity.type} color={activity.color} />
+            <CardContent>
+              <div className="space-y-0">
+                {SAMPLE_ACTIVITIES.map((activity, i) => (
+                  <motion.div
+                    key={activity.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 + i * 0.06, duration: 0.3 }}
+                    className="flex items-start gap-3 relative cursor-pointer group"
+                    onClick={() => setCurrentView(activity.view)}
+                  >
+                    {/* Timeline line and dot */}
+                    <div className="flex flex-col items-center shrink-0">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 transition-transform duration-200 group-hover:scale-110"
+                        style={{ backgroundColor: `${activity.color}18` }}
+                      >
+                        <ActivityIcon type={activity.type} color={activity.color} />
+                      </div>
+                      {i < SAMPLE_ACTIVITIES.length - 1 && (
+                        <div
+                          className="w-0.5 flex-1 min-h-[24px]"
+                          style={{
+                            background: `linear-gradient(to bottom, ${activity.color}40, #21262d)`,
+                          }}
+                        />
+                      )}
                     </div>
-                    {i < SAMPLE_ACTIVITIES.length - 1 && (
-                      <div className="w-px flex-1 min-h-[20px]" style={{ backgroundColor: '#21262d' }} />
-                    )}
+                    {/* Content */}
+                    <div className="flex-1 pb-4 group-hover:translate-x-0.5 transition-transform duration-200">
+                      <p className="text-sm font-semibold" style={{ color: '#c9d1d9' }}>{activity.message}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span
+                          className="text-[10px] font-mono"
+                          style={{ color: activity.color }}
+                        >
+                          {activity.time}
+                        </span>
+                        <ChevronRight
+                          className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                          style={{ color: '#484f58' }}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* ================================================
+          4. QUICK ACTIONS GRID
+          ================================================ */}
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        transition={{ delayChildren: 0.5 }}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-4 h-4" style={{ color: '#e3b341' }} />
+          <h2 className="text-sm font-semibold" style={{ color: '#c9d1d9' }}>Quick Actions</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {QUICK_ACTIONS.map((action) => (
+            <motion.div key={action.id} variants={staggerItem} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Card
+                className="cursor-pointer transition-all duration-300 relative overflow-hidden"
+                style={{
+                  backgroundColor: '#161b22',
+                  borderColor: '#30363d',
+                  borderLeft: '3px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderLeftColor = action.color;
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px ${action.color}15`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.borderLeftColor = 'transparent';
+                  (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+                }}
+                onClick={() => setCurrentView(action.view)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div
+                      className="p-2.5 rounded-xl"
+                      style={{ backgroundColor: `${action.color}15` }}
+                    >
+                      <action.icon className="w-5 h-5" style={{ color: action.color }} />
+                    </div>
+                    <ArrowUpRight className="w-4 h-4" style={{ color: '#484f58' }} />
                   </div>
-                  {/* Content */}
-                  <div className={`flex-1 pb-4 ${i < SAMPLE_ACTIVITIES.length - 1 ? '' : ''}`}>
-                    <p className="text-xs font-medium" style={{ color: '#c9d1d9' }}>{activity.message}</p>
-                    <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>{activity.time}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                  <h3 className="text-sm font-semibold mt-3" style={{ color: '#c9d1d9' }}>{action.title}</h3>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8b949e' }}>{action.description}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       </motion.div>
-    </div>
+
+      {/* ================================================
+          5. API USAGE TRACKER + DEPLOYMENT HISTORY
+          ================================================ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+        >
+          <ApiUsageTracker />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6, duration: 0.4 }}
+        >
+          <DeploymentHistory />
+        </motion.div>
+      </div>
+
+      {/* ================================================
+          6. FOOTER STATS BAR
+          ================================================ */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.8, duration: 0.5 }}
+      >
+        <div
+          className="rounded-xl px-5 py-3 flex items-center justify-center flex-wrap gap-x-8 gap-y-2"
+          style={{
+            backgroundColor: '#0d1117',
+            border: '1px solid #21262d',
+          }}
+        >
+          {[
+            { label: 'projects built this week', value: projects.length, color: '#58a6ff', icon: Hammer },
+            { label: 'deployments completed', value: totalDeployments, color: '#3fb950', icon: Rocket },
+            { label: 'AI messages sent', value: 0, color: '#a371f7', icon: MessageSquare },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <item.icon className="w-3.5 h-3.5" style={{ color: item.color }} />
+              <span className="text-xs font-semibold" style={{ color: item.color }}>{item.value}</span>
+              <span className="text-xs" style={{ color: '#484f58' }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
     </div>
   );
 }

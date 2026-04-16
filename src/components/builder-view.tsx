@@ -25,12 +25,46 @@ import {
   LayoutTemplate,
   MessageSquare,
   Circle,
+  Copy,
+  Check,
+  X,
+  Clock,
+  Zap,
+  Eye,
+  Pencil,
+  ShoppingCart,
+  CheckSquare,
+  BarChart3,
+  MessageCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type BuilderPhase = 'describe' | 'requirements' | 'file_tree' | 'generating' | 'complete' | 'deploying';
 type BuilderTab = 'chat' | 'templates';
+
+/* ─── Quick Start Guide Steps ─── */
+const QUICK_START_STEPS = [
+  { step: 1, title: 'Describe', desc: 'Tell the AI what project you want to build', icon: MessageSquare },
+  { step: 2, title: 'Review', desc: 'Review requirements and approve the file tree', icon: Eye },
+  { step: 3, title: 'Deploy', desc: 'Generate code and deploy to GitHub', icon: Rocket },
+];
+
+/* ─── Recent Templates for empty right panel ─── */
+const RECENT_TEMPLATES = [
+  { name: 'Invoice Manager', icon: ShoppingCart, color: '#58a6ff', prompt: 'Build me a SaaS invoice management app with PDF generation, client portal, payment tracking, dashboard with charts, and Stripe integration' },
+  { name: 'Task Manager', icon: CheckSquare, color: '#3fb950', prompt: 'Build a full-stack todo app with user authentication, team workspaces, real-time collaboration, drag-and-drop boards, and activity history' },
+  { name: 'Analytics Dashboard', icon: BarChart3, color: '#a371f7', prompt: 'Build a real-time analytics dashboard with interactive charts, date range filters, data export to CSV, user segmentation, and email reports' },
+  { name: 'Chat App', icon: MessageCircle, color: '#f778ba', prompt: 'Build a real-time chat application with chat rooms, direct messages, file sharing, message search, user presence, and notifications' },
+];
+
+/* ─── Example Prompts for Empty State ─── */
+const EXAMPLE_PROMPTS = [
+  { icon: '🧾', title: 'Invoice App', desc: 'SaaS invoice management with Stripe', text: 'Build me a SaaS invoice management app' },
+  { icon: '🍕', title: 'Food Delivery', desc: 'REST API with order tracking', text: 'Create a REST API for a food delivery app' },
+  { icon: '✅', title: 'Todo + Auth', desc: 'Full-stack with user authentication', text: 'Build a full-stack todo app with auth' },
+  { icon: '📊', title: 'Analytics', desc: 'Dashboard with charts and export', text: 'Create an analytics dashboard with charts' },
+];
 
 function ProgressDots({ current, total }: { current: number; total: number }) {
   const maxDots = Math.min(total, 20);
@@ -54,6 +88,111 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
     );
   }
   return <div className="flex items-center gap-[3px] flex-wrap">{dots}</div>;
+}
+
+/* ─── Animated Counter ─── */
+function AnimatedCounter({ target, duration = 800 }: { target: number; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const countRef = useRef(0);
+  useEffect(() => {
+    countRef.current = 0;
+    const increment = target > 0 ? target / (duration / 16) : 0;
+    if (increment === 0) return;
+    const timer = setInterval(() => {
+      countRef.current += increment;
+      if (countRef.current >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(countRef.current));
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+  return <span>{count}</span>;
+}
+
+/* ─── Copy Button for Messages ─── */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-[#30363d]"
+      style={{ color: '#8b949e' }}
+      title="Copy message"
+    >
+      {copied ? <Check className="w-3 h-3" style={{ color: '#3fb950' }} /> : <Copy className="w-3 h-3" />}
+    </button>
+  );
+}
+
+/* ─── Code Block Renderer ─── */
+function MessageContent({ content }: { content: string }) {
+  // Split content by code blocks
+  const parts = content.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <div className="space-y-2">
+      {parts.map((part, i) => {
+        if (part.startsWith('```') && part.endsWith('```')) {
+          const lines = part.slice(3, -3);
+          const firstNewline = lines.indexOf('\n');
+          const language = firstNewline > 0 ? lines.slice(0, firstNewline).trim() : '';
+          const code = firstNewline > 0 ? lines.slice(firstNewline + 1) : lines;
+
+          return (
+            <div
+              key={i}
+              className="rounded-lg overflow-hidden"
+              style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}
+            >
+              {language && (
+                <div
+                  className="px-3 py-1.5 text-[10px] font-mono flex items-center justify-between"
+                  style={{ backgroundColor: '#161b22', color: '#8b949e', borderBottom: '1px solid #21262d' }}
+                >
+                  <span>{language}</span>
+                  <CopyButton text={code} />
+                </div>
+              )}
+              <pre className="p-3 overflow-x-auto custom-scroll">
+                <code className="text-xs font-mono leading-relaxed" style={{ color: '#c9d1d9' }}>
+                  {code}
+                </code>
+              </pre>
+            </div>
+          );
+        }
+
+        // Regular text — handle inline code
+        const textParts = part.split(/(`[^`]+`)/g);
+        return (
+          <span key={i} className="whitespace-pre-wrap font-mono text-xs leading-relaxed" style={{ color: '#c9d1d9' }}>
+            {textParts.map((tp, j) => {
+              if (tp.startsWith('`') && tp.endsWith('`')) {
+                return (
+                  <code
+                    key={j}
+                    className="px-1.5 py-0.5 rounded text-[11px]"
+                    style={{ backgroundColor: '#161b22', color: '#58a6ff', border: '1px solid #21262d' }}
+                  >
+                    {tp.slice(1, -1)}
+                  </code>
+                );
+              }
+              return <span key={j}>{tp}</span>;
+            })}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 export function BuilderView() {
@@ -83,12 +222,19 @@ export function BuilderView() {
   const [fileTreePaths, setFileTreePaths] = useState<string[]>([]);
   const [projectName, setProjectName] = useState('');
   const [activeTab, setActiveTab] = useState<BuilderTab>('chat');
+  const [charCount, setCharCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [builderChat]);
+
+  // Determine active step for Quick Start Guide
+  const activeStep = phase === 'describe' ? 1 : (phase === 'requirements' || phase === 'file_tree') ? 2 : 3;
+
+  // Right panel has content?
+  const rightPanelHasContent = requirementsCard && phase !== 'describe' || fileTreePaths.length > 0 || generatedFiles.length > 0;
 
   const sendMessage = useCallback(async (message: string) => {
     if (!message.trim() || isLoading) return;
@@ -101,6 +247,7 @@ export function BuilderView() {
     };
     addBuilderChat(userMsg);
     setInput('');
+    setCharCount(0);
     setIsLoading(true);
 
     try {
@@ -265,6 +412,18 @@ export function BuilderView() {
     setActiveTab('chat');
   };
 
+  const handleCancelBuild = () => {
+    setIsBuilding(false);
+    setPhase('file_tree');
+    setFileTreeApproved(false);
+    toast({ title: 'Build cancelled', description: 'You can restart generation anytime' });
+  };
+
+  const formatTimestamp = (ts: string) => {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="flex h-[calc(100vh-140px)]">
       {/* Chat Panel */}
@@ -322,42 +481,75 @@ export function BuilderView() {
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-4 max-w-3xl mx-auto">
                 {builderChat.length === 0 && (
-                  <div className="text-center py-12">
+                  /* ─── Better Empty State ─── */
+                  <div className="text-center py-10">
+                    {/* Large icon with animated gradient ring */}
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 0.5, type: 'spring' }}
-                      className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 animate-float"
+                      className="relative w-20 h-20 rounded-2xl mx-auto flex items-center justify-center mb-5"
                       style={{ backgroundColor: '#58a6ff10' }}
                     >
-                      <Sparkles className="w-8 h-8 animate-sparkle" style={{ color: '#58a6ff' }} />
+                      <Sparkles className="w-10 h-10 animate-sparkle" style={{ color: '#58a6ff' }} />
+                      {/* Animated gradient ring */}
+                      <div
+                        className="absolute inset-[-4px] rounded-2xl animate-pulse-ring"
+                        style={{
+                          border: '2px solid transparent',
+                          backgroundImage: 'linear-gradient(#161b22, #161b22), linear-gradient(135deg, #58a6ff, #3fb950, #e3b341)',
+                          backgroundOrigin: 'border-box',
+                          backgroundClip: 'padding-box, border-box',
+                        }}
+                      />
                     </motion.div>
-                    <h3 className="text-lg font-semibold" style={{ color: '#c9d1d9' }}>
+
+                    {/* Gradient text title */}
+                    <h3
+                      className="text-xl font-bold mb-2"
+                      style={{
+                        backgroundImage: 'linear-gradient(135deg, #58a6ff, #3fb950)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                      }}
+                    >
                       Describe your project
                     </h3>
-                    <p className="text-sm mt-2 max-w-md mx-auto" style={{ color: '#8b949e' }}>
+                    <p className="text-sm max-w-md mx-auto" style={{ color: '#8b949e' }}>
                       Tell me what you want to build and I&apos;ll create the complete codebase for you
                     </p>
-                    <div className="flex flex-wrap gap-2 justify-center mt-5">
-                      {[
-                        { emoji: '🧾', text: 'Build me a SaaS invoice management app' },
-                        { emoji: '🍕', text: 'Create a REST API for a food delivery app' },
-                        { emoji: '✅', text: 'Build a full-stack todo app with auth' },
-                        { emoji: '📊', text: 'Create an analytics dashboard with charts' },
-                      ].map((example, i) => (
+
+                    {/* Example prompts in 2x2 grid */}
+                    <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto mt-6">
+                      {EXAMPLE_PROMPTS.map((example, i) => (
                         <motion.button
                           key={example.text}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.3 + i * 0.1, duration: 0.3 }}
-                          className="text-xs px-3 py-2 rounded-xl border transition-all duration-200 hover:bg-[#21262d] hover:border-[#58a6ff] hover:-translate-y-0.5"
-                          style={{ borderColor: '#30363d', color: '#8b949e' }}
+                          className="flex items-start gap-2.5 text-left px-3 py-3 rounded-xl border transition-all duration-200 hover:bg-[#21262d] hover:border-[#58a6ff] hover:-translate-y-0.5 group"
+                          style={{ borderColor: '#30363d', backgroundColor: '#0d1117' }}
                           onClick={() => sendMessage(example.text)}
                         >
-                          {example.emoji} {example.text}
+                          <span className="text-lg shrink-0 mt-0.5">{example.icon}</span>
+                          <div>
+                            <p className="text-xs font-medium" style={{ color: '#c9d1d9' }}>{example.title}</p>
+                            <p className="text-[10px] mt-0.5" style={{ color: '#8b949e' }}>{example.desc}</p>
+                          </div>
                         </motion.button>
                       ))}
                     </div>
+
+                    {/* Or try a template link */}
+                    <button
+                      className="mt-4 text-xs flex items-center gap-1.5 mx-auto transition-colors hover:text-[#58a6ff]"
+                      style={{ color: '#8b949e' }}
+                      onClick={() => setActiveTab('templates')}
+                    >
+                      <LayoutTemplate className="w-3.5 h-3.5" />
+                      Or try a template
+                    </button>
                   </div>
                 )}
 
@@ -385,18 +577,28 @@ export function BuilderView() {
                           <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
                         )}
                       </div>
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                          msg.role === 'user' ? 'text-right' : ''
-                        }`}
-                        style={{
-                          backgroundColor: msg.role === 'user' ? '#30363d' : '#0d1117',
-                          border: `1px solid ${msg.role === 'user' ? '#484f58' : '#21262d'}`,
-                          color: '#c9d1d9',
-                        }}
-                      >
-                        <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
-                          {msg.content}
+                      <div className={`max-w-[80%] group relative ${msg.role === 'user' ? 'text-right' : ''}`}>
+                        <div
+                          className="rounded-2xl px-4 py-3 text-sm"
+                          style={{
+                            background: msg.role === 'user'
+                              ? 'linear-gradient(135deg, #30363d, #21262d)'
+                              : '#0d1117',
+                            border: msg.role === 'user'
+                              ? '1px solid #484f58'
+                              : '1px solid #21262d',
+                            borderLeft: msg.role === 'assistant' ? '2px solid #58a6ff' : undefined,
+                            color: '#c9d1d9',
+                          }}
+                        >
+                          <MessageContent content={msg.content} />
+                        </div>
+                        {/* Timestamp + Copy row */}
+                        <div className={`flex items-center gap-2 mt-1 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <span className="text-[10px]" style={{ color: '#484f58' }}>
+                            {formatTimestamp(msg.timestamp)}
+                          </span>
+                          <CopyButton text={msg.content} />
                         </div>
                       </div>
                     </motion.div>
@@ -412,7 +614,7 @@ export function BuilderView() {
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #58a6ff30, #3fb95020)' }}>
                       <Bot className="w-4 h-4" style={{ color: '#58a6ff' }} />
                     </div>
-                    <div className="rounded-2xl px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d' }}>
+                    <div className="rounded-2xl px-4 py-3 flex items-center gap-2" style={{ backgroundColor: '#0d1117', border: '1px solid #21262d', borderLeft: '2px solid #58a6ff' }}>
                       <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#58a6ff' }} />
                       <span className="text-xs" style={{ color: '#8b949e' }}>Thinking...</span>
                     </div>
@@ -425,7 +627,7 @@ export function BuilderView() {
           </>
         )}
 
-        {/* Build Progress */}
+        {/* Build Progress — Card Wrapper with estimated time + cancel */}
         {isBuilding && buildProgress.total > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -434,21 +636,38 @@ export function BuilderView() {
             className="px-4 py-3 border-t"
             style={{ borderColor: '#30363d', backgroundColor: '#0d1117' }}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#58a6ff' }}>
-                <span className="animate-pulse-glow">📦</span> BUILD PROGRESS
-              </span>
-              <span className="text-[10px] font-mono" style={{ color: '#8b949e' }}>
-                {buildProgress.current} of {buildProgress.total} files — {buildProgress.section}
-              </span>
-            </div>
-            <ProgressDots current={buildProgress.current} total={buildProgress.total} />
-            <div className="mt-2">
-              <Progress
-                value={(buildProgress.current / buildProgress.total) * 100}
-                className="h-1.5 progress-shimmer"
-              />
-            </div>
+            <Card style={{ backgroundColor: '#161b22', borderColor: '#30363d' }}>
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium flex items-center gap-2" style={{ color: '#58a6ff' }}>
+                    <span className="animate-pulse-glow">📦</span> BUILD PROGRESS
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] flex items-center gap-1" style={{ color: '#8b949e' }}>
+                      <Clock className="w-3 h-3" />
+                      ~{Math.max(1, Math.ceil((buildProgress.total - buildProgress.current) * 2))}s remaining
+                    </span>
+                    <button
+                      onClick={handleCancelBuild}
+                      className="text-[10px] flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors hover:bg-[#f8514920]"
+                      style={{ color: '#f85149' }}
+                    >
+                      <X className="w-3 h-3" /> Cancel
+                    </button>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono block mb-2" style={{ color: '#8b949e' }}>
+                  {buildProgress.current} of {buildProgress.total} files — {buildProgress.section}
+                </span>
+                <ProgressDots current={buildProgress.current} total={buildProgress.total} />
+                <div className="mt-2">
+                  <Progress
+                    value={(buildProgress.current / buildProgress.total) * 100}
+                    className="h-1.5 progress-shimmer"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </motion.div>
         )}
 
@@ -474,58 +693,116 @@ export function BuilderView() {
           </div>
         )}
 
+        {/* ─── Build Complete Section ─── */}
         {phase === 'complete' && (
           <div className="px-4 py-3 border-t" style={{ borderColor: '#30363d', backgroundColor: '#161b22' }}>
             <Card style={{ backgroundColor: '#0d1117', borderColor: '#238636' }}>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-3 flex-1">
                     <p className="text-sm font-semibold flex items-center gap-2" style={{ color: '#3fb950' }}>
-                      ✅ BUILD COMPLETE — REVIEW BEFORE DEPLOYMENT
+                      ✅ BUILD COMPLETE
                     </p>
-                    <p className="text-xs mt-1" style={{ color: '#8b949e' }}>
-                      {generatedFiles.length} files built for <span style={{ color: '#58a6ff' }}>{projectName}</span>
-                    </p>
+                    {/* File count with animated counter */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold" style={{ color: '#c9d1d9' }}>
+                        <AnimatedCounter target={generatedFiles.length} />
+                      </span>
+                      <span className="text-xs" style={{ color: '#8b949e' }}>files built</span>
+                    </div>
+                    {/* Project summary with tech stack badges */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px]" style={{ color: '#8b949e' }}>for</span>
+                      <span className="text-xs font-medium" style={{ color: '#58a6ff' }}>{projectName}</span>
+                    </div>
+                    {requirementsCard && (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {[
+                          requirementsCard.frontend,
+                          requirementsCard.backend,
+                          requirementsCard.database,
+                          requirementsCard.auth,
+                        ].filter(Boolean).map((tech) => (
+                          <span
+                            key={tech}
+                            className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                            style={{ backgroundColor: 'rgba(88,166,255,0.12)', color: '#58a6ff', border: '1px solid rgba(88,166,255,0.2)' }}
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    className="gap-2"
-                    style={{ background: 'linear-gradient(135deg, #238636, #2ea043)', color: 'white' }}
-                    onClick={handleDeploy}
-                  >
-                    <Rocket className="w-4 h-4" /> DEPLOY APPROVED
-                  </Button>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <Button
+                      className="gap-2 font-semibold"
+                      style={{
+                        background: 'linear-gradient(135deg, #58a6ff, #238636)',
+                        color: 'white',
+                        boxShadow: '0 0 20px rgba(88,166,255,0.25)',
+                      }}
+                      onClick={handleDeploy}
+                    >
+                      <Rocket className="w-4 h-4" /> Deploy Now
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      style={{ borderColor: '#30363d', color: '#8b949e' }}
+                      onClick={() => setPhase('file_tree')}
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Continue Editing
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
 
-        {/* Input */}
+        {/* Input — Enhanced with char count + better CTA */}
         <div className="px-4 py-3 border-t" style={{ borderColor: '#30363d' }}>
           <div className="flex gap-2 max-w-3xl mx-auto">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Describe what you want to build..."
-              className="min-h-[40px] max-h-32 bg-[#0d1117] border-[#30363d] text-[#c9d1d9] text-sm resize-none rounded-xl focus:border-[#58a6ff]"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage(input);
-                }
-              }}
-              rows={1}
-            />
+            <div className="flex-1 relative">
+              <Textarea
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setCharCount(e.target.value.length);
+                }}
+                placeholder="Describe what you want to build..."
+                className="min-h-[44px] max-h-32 bg-[#0d1117] border-[#30363d] text-[#c9d1d9] text-sm resize-none rounded-xl focus:border-[#58a6ff] pr-14"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage(input);
+                  }
+                }}
+                rows={1}
+                maxLength={2000}
+              />
+              {/* Character count */}
+              {charCount > 0 && (
+                <span
+                  className="absolute right-3 bottom-2 text-[10px] font-mono"
+                  style={{ color: charCount > 1800 ? '#f85149' : '#484f58' }}
+                >
+                  {charCount}/2000
+                </span>
+              )}
+            </div>
             <Button
               size="icon"
               disabled={!input.trim() || isLoading}
-              className="rounded-xl shrink-0 transition-all duration-300"
+              className="rounded-xl shrink-0 transition-all duration-300 h-[44px] w-[44px]"
               style={{
                 background: input.trim()
                   ? 'linear-gradient(135deg, #58a6ff, #238636)'
                   : '#21262d',
                 color: input.trim() ? 'white' : '#484f58',
-                boxShadow: input.trim() ? '0 0 15px rgba(88,166,255,0.3)' : 'none',
+                boxShadow: input.trim() ? '0 0 20px rgba(88,166,255,0.3), 0 0 40px rgba(35,134,54,0.15)' : 'none',
               }}
               onClick={() => sendMessage(input)}
             >
@@ -597,6 +874,91 @@ export function BuilderView() {
                 </AnimatePresence>
               </div>
             </div>
+          )}
+
+          {/* ─── Quick Start Guide (shown when right panel is empty) ─── */}
+          {!rightPanelHasContent && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              {/* Steps */}
+              <div className="mb-5">
+                <h3 className="text-xs font-semibold mb-3 flex items-center gap-1.5" style={{ color: '#c9d1d9' }}>
+                  <Zap className="w-3.5 h-3.5" style={{ color: '#e3b341' }} /> Quick Start Guide
+                </h3>
+                <div className="space-y-3">
+                  {QUICK_START_STEPS.map((step) => {
+                    const isActive = step.step === activeStep;
+                    const isPast = step.step < activeStep;
+                    const Icon = step.icon;
+                    return (
+                      <motion.div
+                        key={step.step}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.1 * step.step, duration: 0.3 }}
+                        className="flex items-start gap-3"
+                      >
+                        {/* Numbered circle */}
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold transition-all duration-300"
+                          style={{
+                            backgroundColor: isActive ? '#58a6ff' : isPast ? '#238636' : '#21262d',
+                            color: isActive || isPast ? 'white' : '#8b949e',
+                            boxShadow: isActive ? '0 0 12px rgba(88,166,255,0.4)' : 'none',
+                          }}
+                        >
+                          {isPast ? <Check className="w-3.5 h-3.5" /> : step.step}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <Icon className="w-3 h-3" style={{ color: isActive ? '#58a6ff' : '#8b949e' }} />
+                            <p className="text-xs font-medium" style={{ color: isActive ? '#c9d1d9' : '#8b949e' }}>
+                              {step.title}
+                            </p>
+                          </div>
+                          <p className="text-[10px] mt-0.5" style={{ color: '#484f58' }}>
+                            {step.desc}
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Recent Templates */}
+              <div>
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#484f58' }}>
+                  Recent Templates
+                </h4>
+                <div className="space-y-1.5">
+                  {RECENT_TEMPLATES.map((template) => {
+                    const Icon = template.icon;
+                    return (
+                      <motion.button
+                        key={template.name}
+                        whileHover={{ x: 4 }}
+                        className="w-full flex items-center gap-2.5 text-xs px-3 py-2 rounded-lg border transition-all duration-200 hover:border-[#58a6ff] text-left group"
+                        style={{ borderColor: '#21262d', backgroundColor: '#0d1117', color: '#8b949e' }}
+                        onClick={() => handleTemplateSelect(template.prompt)}
+                      >
+                        <div
+                          className="p-1.5 rounded-md shrink-0 group-hover:scale-110 transition-transform"
+                          style={{ backgroundColor: `${template.color}15` }}
+                        >
+                          <Icon className="w-3.5 h-3.5" style={{ color: template.color }} />
+                        </div>
+                        <span className="truncate" style={{ color: '#c9d1d9' }}>{template.name}</span>
+                        <Zap className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: '#e3b341' }} />
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
           )}
         </div>
       </div>

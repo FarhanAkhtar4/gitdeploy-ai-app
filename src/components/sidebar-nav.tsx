@@ -61,7 +61,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex items-center gap-2.5 px-3 py-4 border-b" style={{ borderColor: '#30363d' }}>
         <div className="relative flex items-center justify-center w-9 h-9 rounded-xl overflow-hidden shrink-0 animate-float" style={{ background: 'linear-gradient(135deg, #58a6ff, #3fb950)' }}>
           <Image
-            src="/logo_gitdeploy.png"
+            src="/logo_gitdeploy.jpg"
             alt="GitDeploy AI"
             width={36}
             height={36}
