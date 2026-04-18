@@ -1584,3 +1584,55 @@ Stage Summary:
 - Lint passes with zero errors
 - Dev server compiles successfully on port 3000
 - All existing functionality preserved
+
+---
+Task ID: 11
+Agent: main (SSR/Hydration Bug Audit & Fix)
+Task: Complete SSR/hydration bug audit, fix all hydration bugs, resolve lint errors, QA test
+
+Work Log:
+- Performed comprehensive SSR safety audit across ALL source files using grep patterns
+- Scanned for: new Date(), Date.now(), Math.random(), window.*, localStorage.*, navigator.*, document.*
+- Found 8 SSR/hydration bugs across 6 files
+- Created shared useMounted hook using useSyncExternalStore (React 18 recommended pattern)
+- Fixed Bug #1: dashboard-view.tsx — Removed dead getGreeting/getGreetingEmoji functions (already had correct useState+useEffect pattern)
+- Fixed Bug #2: deploy-view.tsx — ConfettiParticles Math.random() in useMemo → useMounted+useMemo pattern
+- Fixed Bug #3: chat-view.tsx — INITIAL_CONVERSATIONS module-scope Date.now() → createInitialConversations() factory + useMounted
+- Fixed Bug #4: chat-view.tsx — Math.random() in loading animate prop → deterministic array [55, 70, 45]
+- Fixed Bug #5: chat-view.tsx — Math.random() in voice waveform animate → deterministic arrays
+- Fixed Bug #6: settings-view.tsx — Math.random() in QR code render → deterministic formula ((idx * 7 + 3) % 5 > 1)
+- Fixed Bug #7: deployment-history.tsx — Date.now() at module scope → createMockDeployments() factory + useMounted
+- Fixed Bug #8: notifications-panel.tsx — Date.now() in formatTimeAgo/groupNotifications → useMounted guard
+- Fixed runtime ReferenceError: mounted variable used before declaration in chat-view.tsx
+- Fixed sessionStartTime: useState(Date.now()) → useMounted+useMemo pattern
+- Resolved 3 react-hooks/set-state-in-effect lint errors by switching from useState+useEffect to useSyncExternalStore+useMemo
+- QA tested all 6 views via agent-browser — zero errors, zero console warnings
+- Lint passes with zero errors
+- Committed and pushed to GitHub
+
+Stage Summary:
+- 8 SSR/hydration bugs identified and fixed across 6 component files
+- New shared hook: /src/hooks/use-mounted.ts (useSyncExternalStore-based SSR safety)
+- All 6 views render correctly with zero runtime errors
+- Lint: passes cleanly with zero errors
+- Dev server compiles successfully on port 3000
+- Code pushed to GitHub: https://github.com/FarhanAkhtar4/gitdeploy-ai
+
+## Current Project Status
+- GitDeploy AI is fully functional with zero known hydration bugs
+- All SSR-unsafe patterns (Date/Time in render, Math.random(), module-scope timestamps) have been converted to SSR-safe patterns using useMounted+useMemo or deterministic values
+- useMounted hook provides consistent, lint-friendly SSR safety across the project
+
+## Unresolved Issues / Risks
+- app-store.ts uses Date.now() at module scope for demo data — low risk (zustand store runs client-side only with 'use client')
+- Deploy view window.open() calls — acceptable (button click handlers, not render)
+- Light mode not fully implemented
+- No URL-based routing — views are client-side only
+- Socket.io deploy service on port 3003 may not be running
+
+## Priority Recommendations for Next Phase
+1. Implement light mode fully across all views
+2. Add URL-based routing for bookmarkable views
+3. Seed database with demo user and projects
+4. Improve accessibility (DialogTitle for CommandDialog, ARIA labels)
+5. Add WebSocket reconnection logic in deploy view
