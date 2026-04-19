@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { decrypt } from '@/lib/encryption';
 import { dispatchWorkflow, listWorkflows } from '@/lib/github-api';
 
+export const runtime = 'edge';
+
 // POST /api/rebuild — Trigger a rebuild/re-deploy
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
         where: { user_id: userId },
       });
       if (credential && project.github_repo_url) {
-        const token = decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
+        const token = await decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
         const user = await db.user.findUnique({ where: { id: userId } });
         if (user?.github_username) {
           const repoName = project.name.toLowerCase().replace(/[^a-z0-9-]/g, '-');

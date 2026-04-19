@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const runtime = 'edge';
+
 // POST /api/projects/files — Save project files
 export async function POST(request: NextRequest) {
   try {

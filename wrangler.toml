@@ -1,0 +1,39 @@
+# Cloudflare Workers/Pages Configuration for GitDeploy AI
+# Docs: https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+
+name = "gitdeploy-ai"
+compatibility_date = "2025-04-18"
+compatibility_flags = ["nodejs_compat"]
+
+# ─── Pages Project ───
+# Deploy with: npx wrangler pages deploy .vercel/output/static
+
+# ─── Environment Variables ───
+[vars]
+NODE_ENV = "production"
+
+# ─── KV Namespaces (caching) ───
+# Uncomment after creating: npx wrangler kv namespace create "CACHE"
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "<your-kv-namespace-id>"
+
+# ─── R2 Buckets (file storage) ───
+# Uncomment after creating: npx wrangler r2 bucket create "gitdeploy-storage"
+# [[r2_buckets]]
+# binding = "STORAGE"
+# bucket_name = "gitdeploy-storage"
+
+# ─── D1 Database (Cloudflare's SQLite) ───
+# Uncomment after creating: npx wrangler d1 create "gitdeploy-db"
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "gitdeploy-db"
+# database_id = "<your-d1-database-id>"
+
+# ─── Secrets (set via: npx wrangler secret put <KEY>) ───
+# ENCRYPTION_KEY
+# DATABASE_URL (Turso connection string)
+# GITHUB_TOKEN
+# NEXTAUTH_SECRET
+# Z_AI_API_KEY

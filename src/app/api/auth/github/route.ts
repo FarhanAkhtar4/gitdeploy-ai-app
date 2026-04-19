@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { encrypt, getTokenHint } from '@/lib/encryption';
 import { getAuthenticatedUser } from '@/lib/github-api';
 
+export const runtime = 'edge';
+
 // ✅ [VERIFIED] POST /api/auth/github — Validate and store GitHub token
 export async function POST(request: NextRequest) {
   try {
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt and store token
-    const encrypted = encrypt(token);
+    const encrypted = await encrypt(token);
 
     // Upsert credential
     await db.gitHubCredential.upsert({

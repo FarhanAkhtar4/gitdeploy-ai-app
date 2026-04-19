@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const runtime = 'edge';
+
 // DELETE /api/projects/delete — Delete a project (local record only)
 export async function POST(request: NextRequest) {
   try {

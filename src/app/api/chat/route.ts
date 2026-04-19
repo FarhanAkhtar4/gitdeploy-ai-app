@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { chatWithAI } from '@/lib/ai-service';
 
+export const runtime = 'edge';
+
 // Singleton ZAI instance for streaming
 let zaiInstance: Awaited<ReturnType<typeof import('z-ai-web-dev-sdk').default.create>> | null = null;
 

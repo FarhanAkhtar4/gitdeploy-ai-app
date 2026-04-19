@@ -10,6 +10,8 @@ import {
   dispatchWorkflow,
 } from '@/lib/github-api';
 
+export const runtime = 'edge';
+
 // POST /api/projects/deploy — Deploy project to GitHub
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'GitHub not connected' }, { status: 401 });
     }
 
-    const token = decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
+    const token = await decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
     const owner = credential.scopes; // We need to get the owner from the user
     const user = await db.user.findUnique({ where: { id: userId } });
     const githubOwner = user?.github_username;

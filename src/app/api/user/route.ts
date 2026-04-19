@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const runtime = 'edge';
+
 // Demo user fallback when no database connection
 const DEMO_USER = {
   id: 'demo-user-1',

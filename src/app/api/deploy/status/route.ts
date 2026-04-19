@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { decrypt } from '@/lib/encryption';
 import { getWorkflowRun, listWorkflowRuns } from '@/lib/github-api';
 
+export const runtime = 'edge';
+
 // GET /api/deploy/status — Poll deployment status
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +40,7 @@ export async function GET(request: NextRequest) {
         });
 
         if (credential) {
-          const token = decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
+          const token = await decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
           const user = await db.user.findUnique({ where: { id: userId } });
 
           if (user?.github_username) {
@@ -99,7 +101,7 @@ export async function GET(request: NextRequest) {
         where: { user_id: userId },
       });
       if (credential && projectId) {
-        const token = decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
+        const token = await decrypt(credential.encrypted_token, credential.iv, credential.auth_tag);
         const user = await db.user.findUnique({ where: { id: userId } });
         const project = await db.project.findUnique({ where: { id: projectId } });
 

@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { withCache } from '@/lib/cache';
+
+export const runtime = 'edge';
 
 // Hosting advisor data — verified free tier information
 const HOSTING_PLATFORMS = {
@@ -157,10 +160,16 @@ const HOSTING_PLATFORMS = {
   ],
 };
 
-// GET /api/hosting — Get hosting recommendations
+// GET /api/hosting — Get hosting recommendations (edge-cached for 5 minutes)
 export async function GET() {
+  const data = await withCache(
+    'hosting-platforms',
+    async () => HOSTING_PLATFORMS,
+    300 // 5 minute cache
+  );
+
   return NextResponse.json({
-    platforms: HOSTING_PLATFORMS,
+    platforms: data,
     disclaimer: '⚠️ Free tier limits listed are based on knowledge at time of training and may have changed. Always verify current limits at the official pricing URL provided before making deployment decisions.',
   });
 }

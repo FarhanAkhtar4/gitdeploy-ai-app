@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const runtime = 'edge';
+
 // GET /api/projects/list — List all projects for a user
 export async function GET(request: NextRequest) {
   try {
